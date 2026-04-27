@@ -1,7 +1,9 @@
 [project]
-name = "vllm"
+name = "vllm-env"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "vllm>=0.1.0",
+]
