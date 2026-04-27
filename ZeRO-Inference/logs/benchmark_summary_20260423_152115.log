@@ -1,0 +1,7 @@
+================================
+ZeRO-Inference Benchmark Started
+Timestamp: 20260423_152115
+================================
+
+Running: Model=facebook/opt-6.7b, Batch Size=4, QuantBits=16
+Log file: /logs/facebook_opt-6.7b_batch4_quant16_20260423_152115.log

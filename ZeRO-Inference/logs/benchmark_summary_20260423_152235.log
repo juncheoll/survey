@@ -1,0 +1,159 @@
+================================
+ZeRO-Inference Benchmark Started
+Timestamp: 20260423_152235
+================================
+
+Running: Model=facebook/opt-6.7b, Batch Size=4, QuantBits=16
+Log file: /logs/facebook_opt-6.7b_batch4_quant16_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=4, QuantBits=8
+Log file: /logs/facebook_opt-6.7b_batch4_quant8_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=4, QuantBits=4
+Log file: /logs/facebook_opt-6.7b_batch4_quant4_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=8, QuantBits=16
+Log file: /logs/facebook_opt-6.7b_batch8_quant16_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=8, QuantBits=8
+Log file: /logs/facebook_opt-6.7b_batch8_quant8_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=8, QuantBits=4
+Log file: /logs/facebook_opt-6.7b_batch8_quant4_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=16, QuantBits=16
+Log file: /logs/facebook_opt-6.7b_batch16_quant16_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=16, QuantBits=8
+Log file: /logs/facebook_opt-6.7b_batch16_quant8_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=16, QuantBits=4
+Log file: /logs/facebook_opt-6.7b_batch16_quant4_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=32, QuantBits=16
+Log file: /logs/facebook_opt-6.7b_batch32_quant16_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=32, QuantBits=8
+Log file: /logs/facebook_opt-6.7b_batch32_quant8_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=32, QuantBits=4
+Log file: /logs/facebook_opt-6.7b_batch32_quant4_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=64, QuantBits=16
+Log file: /logs/facebook_opt-6.7b_batch64_quant16_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=64, QuantBits=8
+Log file: /logs/facebook_opt-6.7b_batch64_quant8_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=64, QuantBits=4
+Log file: /logs/facebook_opt-6.7b_batch64_quant4_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=4, QuantBits=16
+Log file: /logs/facebook_opt-13b_batch4_quant16_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=4, QuantBits=8
+Log file: /logs/facebook_opt-13b_batch4_quant8_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=4, QuantBits=4
+Log file: /logs/facebook_opt-13b_batch4_quant4_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-13b, Batch Size=8, QuantBits=16
+Log file: /logs/facebook_opt-13b_batch8_quant16_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=8, QuantBits=8
+Log file: /logs/facebook_opt-13b_batch8_quant8_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=8, QuantBits=4
+Log file: /logs/facebook_opt-13b_batch8_quant4_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-13b, Batch Size=16, QuantBits=16
+Log file: /logs/facebook_opt-13b_batch16_quant16_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=16, QuantBits=8
+Log file: /logs/facebook_opt-13b_batch16_quant8_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=16, QuantBits=4
+Log file: /logs/facebook_opt-13b_batch16_quant4_20260423_152235.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-13b, Batch Size=32, QuantBits=16
+Log file: /logs/facebook_opt-13b_batch32_quant16_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=32, QuantBits=8
+Log file: /logs/facebook_opt-13b_batch32_quant8_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=32, QuantBits=4
+Log file: /logs/facebook_opt-13b_batch32_quant4_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=64, QuantBits=16
+Log file: /logs/facebook_opt-13b_batch64_quant16_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=64, QuantBits=8
+Log file: /logs/facebook_opt-13b_batch64_quant8_20260423_152235.log
+✗ FAILED
+---
+
+Running: Model=facebook/opt-13b, Batch Size=64, QuantBits=4
+Log file: /logs/facebook_opt-13b_batch64_quant4_20260423_152235.log
+✗ FAILED
+---
+
+================================
+Benchmark Completed
+Total: 30 | Success: 14 | Failed: 16
+================================

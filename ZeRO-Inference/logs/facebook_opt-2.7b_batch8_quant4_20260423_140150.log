@@ -1,0 +1,44 @@
+/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  torch.utils._pytree._register_pytree_node(
+/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  torch.utils._pytree._register_pytree_node(
+/opt/venvs/zero/lib/python3.11/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+load model
+model.config = OPTConfig {
+  "_name_or_path": "facebook/opt-2.7b",
+  "_remove_final_layer_norm": false,
+  "activation_dropout": 0.0,
+  "activation_function": "relu",
+  "architectures": [
+    "OPTForCausalLM"
+  ],
+  "attention_dropout": 0.0,
+  "bos_token_id": 2,
+  "do_layer_norm_before": true,
+  "dropout": 0.1,
+  "enable_bias": true,
+  "eos_token_id": 2,
+  "ffn_dim": 10240,
+  "hidden_size": 2560,
+  "init_std": 0.02,
+  "layer_norm_elementwise_affine": true,
+  "layerdrop": 0.0,
+  "max_position_embeddings": 2048,
+  "model_type": "opt",
+  "num_attention_heads": 32,
+  "num_hidden_layers": 32,
+  "pad_token_id": 1,
+  "prefix": "</s>",
+  "torch_dtype": "float16",
+  "transformers_version": "4.33.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50272,
+  "word_embed_proj_dim": 2560
+}
+
+benchmark, prompt_len = 512, execute_gen_len = 32, input_ids.shape = torch.Size([8, 512])
+token_latency=[1.2522344589233398, 0.6676533222198486, 0.4419243335723877, 0.4392263889312744, 0.4392261505126953, 0.44020771980285645, 0.43981170654296875, 0.440110445022583, 0.43993663787841797, 0.4409961700439453, 0.44018983840942383, 0.44247984886169434, 0.4415774345397949, 0.4415402412414551, 0.44191908836364746, 0.4422469139099121, 0.4426002502441406, 0.4431025981903076, 0.4422628879547119, 0.4424257278442383, 0.4416482448577881, 0.44129133224487305, 0.44197678565979004, 0.44235944747924805, 0.4423489570617676, 0.44220972061157227, 0.4424154758453369, 0.44251179695129395, 0.4423966407775879, 0.44339752197265625, 0.44344043731689453, 0.4427616596221924]
+token_latency=[1.175297498703003, 0.43851256370544434, 0.43876075744628906, 0.4395263195037842, 0.43874239921569824, 0.43874382972717285, 0.4393157958984375, 0.43871426582336426, 0.43964290618896484, 0.44045448303222656, 0.44068050384521484, 0.4411637783050537, 0.44145703315734863, 0.44089174270629883, 0.4414515495300293, 0.4420735836029053, 0.44216012954711914, 0.442824125289917, 0.44287800788879395, 0.44246506690979004, 0.44140148162841797, 0.44199562072753906, 0.4422154426574707, 0.44245219230651855, 0.44210386276245117, 0.4426534175872803, 0.4427347183227539, 0.44217467308044434, 0.4431338310241699, 0.4436957836151123, 0.44251322746276855, 0.44373631477355957]
+token_latency=[1.05814790725708, 0.4392280578613281, 0.4392087459564209, 0.44019341468811035, 0.4399747848510742, 0.44025683403015137, 0.44236135482788086, 0.43964672088623047, 0.4396333694458008, 0.4397432804107666, 0.4404487609863281, 0.4410848617553711, 0.44097399711608887, 0.44214677810668945, 0.44234609603881836, 0.4429187774658203, 0.44225645065307617, 0.4430689811706543, 0.44269680976867676, 0.4422476291656494, 0.4418938159942627, 0.44179868698120117, 0.4422628879547119, 0.44273805618286133, 0.44153761863708496, 0.44200849533081055, 0.4429044723510742, 0.44361162185668945, 0.44356775283813477, 0.44424939155578613, 0.44432806968688965, 0.44381237030029297]
+[rank0]:[W423 14:20:39.158214518 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

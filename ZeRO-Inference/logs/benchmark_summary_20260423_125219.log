@@ -1,0 +1,27 @@
+================================
+ZeRO-Inference Benchmark Started
+Timestamp: 20260423_125219
+================================
+
+Running: Model=facebook/opt-1.3b, Batch Size=32
+Log file: /logs/facebook_opt-1.3b_batch32_20260423_125219.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-1.3b, Batch Size=64
+Log file: /logs/facebook_opt-1.3b_batch64_20260423_125219.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-2.7b, Batch Size=32
+Log file: /logs/facebook_opt-2.7b_batch32_20260423_125219.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-2.7b, Batch Size=64
+Log file: /logs/facebook_opt-2.7b_batch64_20260423_125219.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=32
+Log file: /logs/facebook_opt-6.7b_batch32_20260423_125219.log

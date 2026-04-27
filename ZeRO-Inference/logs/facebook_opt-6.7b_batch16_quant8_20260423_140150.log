@@ -1,0 +1,45 @@
+/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  torch.utils._pytree._register_pytree_node(
+/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  torch.utils._pytree._register_pytree_node(
+/opt/venvs/zero/lib/python3.11/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+load model
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:08<00:08,  8.34s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:11<00:00,  5.10s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:11<00:00,  5.59s/it]
+model.config = OPTConfig {
+  "_name_or_path": "facebook/opt-6.7b",
+  "_remove_final_layer_norm": false,
+  "activation_dropout": 0.0,
+  "activation_function": "relu",
+  "architectures": [
+    "OPTForCausalLM"
+  ],
+  "attention_dropout": 0.0,
+  "bos_token_id": 2,
+  "do_layer_norm_before": true,
+  "dropout": 0.1,
+  "enable_bias": true,
+  "eos_token_id": 2,
+  "ffn_dim": 16384,
+  "hidden_size": 4096,
+  "init_std": 0.02,
+  "layer_norm_elementwise_affine": true,
+  "layerdrop": 0.0,
+  "max_position_embeddings": 2048,
+  "model_type": "opt",
+  "num_attention_heads": 32,
+  "num_hidden_layers": 32,
+  "pad_token_id": 1,
+  "prefix": "</s>",
+  "torch_dtype": "float16",
+  "transformers_version": "4.33.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50272,
+  "word_embed_proj_dim": 4096
+}
+
+benchmark, prompt_len = 512, execute_gen_len = 32, input_ids.shape = torch.Size([16, 512])
+token_latency=[5.136508226394653, 2.45151424407959, 2.359145164489746, 2.3642215728759766, 2.363375425338745, 2.4029219150543213, 2.4689948558807373, 2.3922083377838135, 2.3971786499023438, 2.4166312217712402, 2.416353940963745, 2.375300168991089, 2.3873918056488037, 2.45674991607666, 2.4090240001678467, 2.402665138244629, 2.3786585330963135, 2.4074907302856445, 2.4106709957122803, 2.382071018218994, 2.391712188720703, 2.3791651725769043, 2.3777060508728027, 2.3820676803588867, 2.37632417678833, 2.375947952270508, 2.3751516342163086, 2.374130964279175, 2.513885498046875, 2.3820552825927734, 2.3770592212677, 2.395254135131836]
+token_latency=[5.072059631347656, 2.361346960067749, 2.3711512088775635, 2.3615822792053223, 2.430511713027954, 2.479999303817749, 2.4017934799194336, 2.362169027328491, 2.365218162536621, 2.3737471103668213, 2.371241331100464, 2.371490955352783, 2.3779611587524414, 2.4794270992279053, 2.3665881156921387, 2.3670005798339844, 2.3694138526916504, 2.367870807647705, 2.3735437393188477, 2.3783628940582275, 2.4138686656951904, 2.3800694942474365, 2.3770029544830322, 2.376405715942383, 2.4406185150146484, 2.40779709815979, 2.386255979537964, 2.387247323989868, 2.550865888595581, 2.5149736404418945, 2.3922524452209473, 2.386946201324463]
+token_latency=[5.093756914138794, 2.3608431816101074, 2.4245214462280273, 2.4108309745788574, 2.358978271484375, 2.3632194995880127, 2.3613250255584717, 2.361875057220459, 2.3625710010528564, 2.364213228225708, 2.3650128841400146, 2.3691978454589844, 2.3665719032287598, 2.365813970565796, 2.368361473083496, 2.370023488998413, 2.368619918823242, 2.368903875350952, 2.3706088066101074, 2.3722598552703857, 2.373900890350342, 2.3765735626220703, 2.3742995262145996, 2.374371290206909, 2.373194456100464, 2.3757076263427734, 2.3742330074310303, 2.3742339611053467, 2.3749959468841553, 2.3750064373016357, 2.376310348510742, 2.376213550567627]
+[rank0]:[W423 15:04:56.461632515 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

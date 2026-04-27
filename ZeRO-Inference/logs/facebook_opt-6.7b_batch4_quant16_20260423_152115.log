@@ -1,0 +1,133 @@
+/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  torch.utils._pytree._register_pytree_node(
+/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  torch.utils._pytree._register_pytree_node(
+/opt/venvs/zero/lib/python3.11/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+load model
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:09<00:09,  9.11s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:12<00:00,  5.64s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:12<00:00,  6.16s/it]
+model.config = OPTConfig {
+  "_name_or_path": "facebook/opt-6.7b",
+  "_remove_final_layer_norm": false,
+  "activation_dropout": 0.0,
+  "activation_function": "relu",
+  "architectures": [
+    "OPTForCausalLM"
+  ],
+  "attention_dropout": 0.0,
+  "bos_token_id": 2,
+  "do_layer_norm_before": true,
+  "dropout": 0.1,
+  "enable_bias": true,
+  "eos_token_id": 2,
+  "ffn_dim": 16384,
+  "hidden_size": 4096,
+  "init_std": 0.02,
+  "layer_norm_elementwise_affine": true,
+  "layerdrop": 0.0,
+  "max_position_embeddings": 2048,
+  "model_type": "opt",
+  "num_attention_heads": 32,
+  "num_hidden_layers": 32,
+  "pad_token_id": 1,
+  "prefix": "</s>",
+  "torch_dtype": "float16",
+  "transformers_version": "4.33.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50272,
+  "word_embed_proj_dim": 4096
+}
+
+benchmark, prompt_len = 512, execute_gen_len = 32, input_ids.shape = torch.Size([4, 512])
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/DeepSpeedExamples/inference/huggingface/zero_inference/run_model.py", line 386, in <module>
+[rank0]:     run_generation(
+[rank0]:   File "/DeepSpeedExamples/inference/huggingface/zero_inference/run_model.py", line 271, in run_generation
+[rank0]:     output_ids = model.generate(**input_tokens, **generate_kwargs)
+[rank0]:                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+[rank0]:     return func(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/transformers/generation/utils.py", line 1602, in generate
+[rank0]:     return self.greedy_search(
+[rank0]:            ^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/transformers/generation/utils.py", line 2454, in greedy_search
+[rank0]:     outputs = self(
+[rank0]:               ^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1885, in _call_impl
+[rank0]:     return inner()
+[rank0]:            ^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1833, in inner
+[rank0]:     result = forward_call(*args, **kwargs)
+[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/transformers/models/opt/modeling_opt.py", line 1016, in forward
+[rank0]:     outputs = self.model.decoder(
+[rank0]:               ^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1885, in _call_impl
+[rank0]:     return inner()
+[rank0]:            ^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1833, in inner
+[rank0]:     result = forward_call(*args, **kwargs)
+[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/transformers/models/opt/modeling_opt.py", line 797, in forward
+[rank0]:     hidden_states = self.final_layer_norm(hidden_states)
+[rank0]:                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1885, in _call_impl
+[rank0]:     return inner()
+[rank0]:            ^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1822, in inner
+[rank0]:     args_result = hook(self, args)
+[rank0]:                   ^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/_dynamo/eval_frame.py", line 1263, in _fn
+[rank0]:     return fn(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/runtime/zero/parameter_offload.py", line 300, in _pre_forward_module_hook
+[rank0]:     self.pre_sub_module_forward_function(module)
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+[rank0]:     return func(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/runtime/zero/parameter_offload.py", line 475, in pre_sub_module_forward_function
+[rank0]:     param_coordinator.fetch_sub_module(sub_module, forward=True)
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/_dynamo/eval_frame.py", line 1263, in _fn
+[rank0]:     return fn(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank0]:     ret_val = func(*args, **kwargs)
+[rank0]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+[rank0]:     return func(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/runtime/zero/partitioned_param_coordinator.py", line 325, in fetch_sub_module
+[rank0]:     self._fetch_sub_module_impl(current_submodule, forward, is_leaf)
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/runtime/zero/partitioned_param_coordinator.py", line 460, in _fetch_sub_module_impl
+[rank0]:     self.__all_gather_params(params_to_prefetch, forward)
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank0]:     ret_val = func(*args, **kwargs)
+[rank0]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/runtime/zero/partitioned_param_coordinator.py", line 520, in __all_gather_params
+[rank0]:     self.__all_gather_params_(nonquantized_params, forward, quantize=self.zero_quantized_weights)
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/runtime/zero/partitioned_param_coordinator.py", line 549, in __all_gather_params_
+[rank0]:     handle = param_group[0].all_gather_coalesced(param_group, quantize=quantize)
+[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank0]:     ret_val = func(*args, **kwargs)
+[rank0]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/runtime/zero/partition_parameters.py", line 1450, in all_gather_coalesced
+[rank0]:     return _no_gather_coalesced(params)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/runtime/zero/partition_parameters.py", line 879, in _no_gather_coalesced
+[rank0]:     return NoGatherHandle(param)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/opt/venvs/zero/lib/python3.11/site-packages/deepspeed/runtime/zero/partition_parameters.py", line 68, in __init__
+[rank0]:     param.data = param.ds_tensor.data.to(device=get_accelerator().current_device_name(),
+[rank0]:                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]: KeyboardInterrupt

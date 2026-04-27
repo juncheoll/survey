@@ -1,0 +1,19 @@
+================================
+ZeRO-Inference Benchmark Started
+Timestamp: 20260423_131713
+================================
+
+Running: Model=facebook/opt-6.7b, Batch Size=32
+Log file: /logs/facebook_opt-6.7b_batch32_20260423_131713.log
+✓ SUCCESS
+---
+
+Running: Model=facebook/opt-6.7b, Batch Size=64
+Log file: /logs/facebook_opt-6.7b_batch64_20260423_131713.log
+✗ FAILED
+---
+
+================================
+Benchmark Completed
+Total: 2 | Success: 1 | Failed: 1
+================================

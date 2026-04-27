@@ -1,0 +1,14 @@
+/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  torch.utils._pytree._register_pytree_node(
+/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+  torch.utils._pytree._register_pytree_node(
+usage: run_model.py [-h] [--model MODEL] [--dummy] [--loops LOOPS]
+                    [--batch-size BATCH_SIZE] [--prompt-len PROMPT_LEN]
+                    [--gen-len GEN_LEN] [--local_rank LOCAL_RANK]
+                    [--pin-memory PIN_MEMORY] [--cpu-offload] [--disk-offload]
+                    [--offload-dir OFFLOAD_DIR] [--kv-offload]
+                    [--log-file LOG_FILE] [--verbose VERBOSE]
+                    [--quant_bits QUANT_BITS]
+                    [--quant_group_size QUANT_GROUP_SIZE] [--pin_kv_cache]
+                    [--async_kv_offload] [--use_gds]
+run_model.py: error: unrecognized arguments: --quant-bits 8
