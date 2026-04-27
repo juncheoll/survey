@@ -35,6 +35,6 @@ python3 -m flexllmgen.flex_opt --model facebook/opt-6.7b --percent 0 100 100 0 1
 
 #### Llama Model (NEW!)
 ```
-python3 -m flexllmgen.flex_opt --model meta-llama/Llama-2-7b-hf --percent 0 100 100 0 100 0
+python3 -m flexllmgen.flex_opt --model meta-llama/Llama-2-7b-chat-hf --percent 0 100 100 0 100 0
 python3 -m flexllmgen.flex_opt --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 --percent 0 100 100 0 100 0
 ```

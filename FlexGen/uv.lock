@@ -8,7 +8,7 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "flexgen",
+    "flexgen-env",
     "flexllmgen",
 ]
 
@@ -169,7 +169,7 @@ wheels = [
 ]
 
 [[package]]
-name = "flexgen"
+name = "flexgen-env"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
