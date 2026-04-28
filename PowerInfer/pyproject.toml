@@ -1,0 +1,13 @@
+[project]
+name = "powerinfer-env"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv.workspace]
+members = [
+    "PowerInfer/gguf-py",
+    "PowerInfer/powerinfer-py",
+]
