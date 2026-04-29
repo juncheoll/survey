@@ -17,12 +17,16 @@ MODEL=${1:-facebook/opt-1.3b}
 # Detect virtual environment (uv venv or conda)
 if [ -n "$VIRTUAL_ENV" ]; then
     VENV_PYTHON=$VIRTUAL_ENV/bin/python
+    VENV_BIN=$VIRTUAL_ENV/bin
 elif [ -n "$CONDA_PREFIX" ]; then
     VENV_PYTHON=$CONDA_PREFIX/bin/python
+    VENV_BIN=$CONDA_PREFIX/bin
 elif [ -d ".venv/bin" ]; then
     VENV_PYTHON=$(pwd)/.venv/bin/python
+    VENV_BIN=$(pwd)/.venv/bin
 elif [ -d "venv/bin" ]; then
     VENV_PYTHON=$(pwd)/venv/bin/python
+    VENV_BIN=$(pwd)/venv/bin
 else
     echo "Error: No virtual environment detected!"
     echo "Please activate uv venv or conda environment first:"
@@ -40,6 +44,15 @@ fi
 echo "Using Python: $VENV_PYTHON"
 echo "Python version: $($VENV_PYTHON --version)"
 
+# Check Ray is installed in the virtual environment
+if [ ! -f "$VENV_BIN/ray" ]; then
+    echo "Error: Ray is not installed in virtual environment at $VENV_BIN"
+    echo "Install with: pip install ray"
+    exit 1
+fi
+
+RAY_EXEC=$VENV_BIN/ray
+
 # Check Ray cluster status
 echo "Checking Ray cluster status..."
 if ! command -v ray &> /dev/null; then
@@ -53,12 +66,12 @@ MY_IPADDR=$(hostname -i)
 
 # Try to get worker IPs - works if Ray cluster is running locally or via RAY_ADDRESS env var
 if [ -f ~/ray_bootstrap_config.yaml ]; then
-    # Use bootstrap config if it exists
-    all_public_ips=$(ray get-worker-ips ~/ray_bootstrap_config.yaml 2>/dev/null)
+    # Use bootstrap config if it exists - use $RAY_EXEC from venv
+    all_public_ips=$($RAY_EXEC get-worker-ips ~/ray_bootstrap_config.yaml 2>/dev/null)
 else
     # Try to get from running cluster (requires RAY_ADDRESS or local cluster)
     # RAY_ADDRESS can be set like: export RAY_ADDRESS=HEAD_IP:6379
-    all_public_ips=$(ray get-worker-ips 2>/dev/null)
+    all_public_ips=$($RAY_EXEC get-worker-ips 2>/dev/null)
     
     if [ -z "$all_public_ips" ]; then
         # If still no worker IPs, try with explicit ray address
