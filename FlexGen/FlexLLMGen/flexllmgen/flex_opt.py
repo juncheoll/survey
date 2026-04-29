@@ -1976,7 +1976,8 @@ def run_flexllmgen(args):
     # Select appropriate tokenizer based on model type
     model_name_lower = args.model.lower()
     if "llama" in model_name_lower or "tinyllama" in model_name_lower:
-        tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model, padding_side="left", use_fast=False)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
     elif args.model == "facebook/galactica-30b":

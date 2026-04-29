@@ -7,6 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "flexllmgen",
     "ray[default]>=2.55.1",
+    "tiktoken>=0.12.0",
 ]
 
 [tool.uv.workspace]

@@ -172,19 +172,26 @@ def get_llama_config(name, **kwargs):
 
     arch_name = name
 
-    if arch_name == "llama-2-7b-chat-hf" or arch_name == "llama-2-7b-hf" or arch_name == "llama-7b":
+    if (arch_name == "llama-2-7b-chat-hf" or
+        arch_name == "llama-2-7b-chat" or
+        arch_name == "llama-2-7b-hf" or
+        arch_name == "llama-2-7b" or arch_name == "llama-7b"):
         config = LlamaConfig(name=name,
             max_seq_len=4096, num_hidden_layers=32, n_head=32,
             hidden_size=4096, input_dim=4096, ffn_embed_dim=11008,
         )
     elif (arch_name == "llama-2-13b-chat-hf" or
-          arch_name == "llama-2-13b-hf" or arch_name == "llama-13b"):
+          arch_name == "llama-2-13b-chat" or
+          arch_name == "llama-2-13b-hf" or
+          arch_name == "llama-2-13b" or arch_name == "llama-13b"):
         config = LlamaConfig(name=name,
             max_seq_len=4096, num_hidden_layers=40, n_head=40,
             hidden_size=5120, input_dim=5120, ffn_embed_dim=13824,
         )
     elif (arch_name == "llama-2-70b-chat-hf" or
-          arch_name == "llama-2-70b-hf" or arch_name == "llama-70b"):
+          arch_name == "llama-2-70b-chat" or
+          arch_name == "llama-2-70b-hf" or
+          arch_name == "llama-2-70b" or arch_name == "llama-70b"):
         config = LlamaConfig(name=name,
             max_seq_len=4096, num_hidden_layers=80, n_head=64,
             hidden_size=8192, input_dim=8192, ffn_embed_dim=28672,

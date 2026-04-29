@@ -571,21 +571,26 @@ def comm_test(comm_device):
 def run_flexllmgen_dist(args):
     t_name = args.model.replace("175b", "66b")
     model_name_lower = args.model.lower()
+    print("tokenizer - start")
     if "llama" in model_name_lower or "tinyllama" in model_name_lower:
-        tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model, padding_side="left", use_fast=False)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
     elif args.model == "facebook/galactica-30b":
         tokenizer = AutoTokenizer.from_pretrained("facebook/galactica-30b", padding_side="left")
     else:
         tokenizer = AutoTokenizer.from_pretrained(t_name, padding_side="left")
+    print("tokenizer - done")
     num_inner_iterations = args.num_inner_iterations if args.num_inner_iterations is not None else args.world_size
     num_prompts = args.num_gpu_batches * args.gpu_batch_size * num_inner_iterations * 1
     prompt_len, gen_len, cut_gen_len = args.prompt_len, args.gen_len, args.cut_gen_len
 
     # Task and policy
+    print("test inputs - start")
     warmup_inputs = get_test_inputs(32, num_prompts, tokenizer)
     inputs = get_test_inputs(prompt_len, num_prompts, tokenizer)
+    print("test inputs - done")
 
     gpu = TorchDevice(f"cuda:{args.local_rank}")
     cpu = TorchDevice("cpu")
@@ -593,7 +598,9 @@ def run_flexllmgen_dist(args):
     env = ExecutionEnv(gpu=gpu, cpu=cpu, disk=disk, mixed=TorchMixedDevice([gpu, cpu, disk]))
     TorchTensor.name_count = count(start=args.rank, step=args.world_size)
 
+    print("comm test - start")
     comm_test(gpu.dev if args.comm_device == "gpu" else cpu.dev)
+    print("comm test - done")
 
     policy = Policy(args.gpu_batch_size, args.num_gpu_batches,
                     args.percent[0], args.percent[1],
@@ -610,9 +617,11 @@ def run_flexllmgen_dist(args):
     assert not (args.compress_cache and args.attn_sparsity < 1.0), "Not implemented"
 
     config = get_model_config(args.model, pad_token_id=tokenizer.pad_token_id)
+    print("init model - start")
     model = DistOptLM(config, env, args.path, policy, args.rank,
                       args.world_size, args.comm_device, num_inner_iterations=num_inner_iterations,
                       async_comm=args.async_comm)
+    print("init model - done")
     cache_size = config.cache_bytes(num_prompts, prompt_len + gen_len)
     hidden_size = config.hidden_bytes(num_prompts, prompt_len + gen_len)
     print(f"model size: {config.model_bytes()/GB:.3f} GB, "
