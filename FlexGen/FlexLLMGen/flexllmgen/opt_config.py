@@ -188,6 +188,11 @@ def get_llama_config(name, **kwargs):
             max_seq_len=4096, num_hidden_layers=40, n_head=40,
             hidden_size=5120, input_dim=5120, ffn_embed_dim=13824,
         )
+    elif arch_name == "llama-30b" or arch_name == "llama-30b-hf":
+        config = LlamaConfig(name=name,
+            max_seq_len=2048, num_hidden_layers=60, n_head=52,
+            hidden_size=6656, input_dim=6656, ffn_embed_dim=17920,
+        )
     elif (arch_name == "llama-2-70b-chat-hf" or
           arch_name == "llama-2-70b-chat" or
           arch_name == "llama-2-70b-hf" or
@@ -366,6 +371,8 @@ def get_llama_hf_model_name(model_name):
         return "meta-llama/Llama-2-7b-hf"
     elif name == "llama-13b":
         return "meta-llama/Llama-2-13b-hf"
+    elif name == "llama-30b" or name == "llama-30b-hf":
+        return "huggyllama/llama-30b"
     elif name == "llama-70b":
         return "meta-llama/Llama-2-70b-hf"
     elif name == "tinyllama" or name == "tinyllama-1.1b-chat-v1.0":
