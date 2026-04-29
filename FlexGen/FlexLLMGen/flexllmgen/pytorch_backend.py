@@ -365,6 +365,16 @@ class TorchDevice:
         rms = torch.sqrt(torch.mean(hidden_states ** 2, dim=-1, keepdim=True) + eps)
         return (hidden_states / rms) * weight
 
+    def _repeat_kv_heads(self, x, batch_size, n_head, n_kv_head):
+        """Expand grouped-query K/V heads to match query heads."""
+        if n_kv_head == n_head:
+            return x
+        assert n_head % n_kv_head == 0
+        repeat = n_head // n_kv_head
+        return (x.view(batch_size, n_kv_head, *x.shape[1:])
+                .repeat_interleave(repeat, dim=1)
+                .reshape(batch_size * n_head, *x.shape[1:]))
+
     def init_cache_one_gpu_batch(self, config, task, policy):
         num_head, hidden_size, prompt_len, gen_len, gpu_batch_size = (
             config.n_head, config.input_dim, task.prompt_len, task.gen_len,
@@ -649,7 +659,7 @@ class TorchDevice:
         return value
 
     def llama_mha(self, inputs, attention_mask, w_q, w_k, w_v,
-                  w_out, w_ln, n_head, donate, compress_cache, comp_config,
+                  w_out, w_ln, n_head, n_kv_head, donate, compress_cache, comp_config,
                   rope_theta=10000.0, eps=1e-5):
         """Llama Multi-head attention (prefill phase) with RoPE and RMSNorm."""
         # decompress weights
@@ -671,21 +681,25 @@ class TorchDevice:
         k = F.linear(hidden, w_k.data)
         v = F.linear(hidden, w_v.data)
         
-        # shape: (b, s, n_head, head_dim)
+        # q shape: (b, s, n_head, head_dim)
+        # k/v shape: (b, s, n_kv_head, head_dim)
         q = q.view(b, s, n_head, head_dim)
-        k = k.view(b, s, n_head, head_dim)
-        v = v.view(b, s, n_head, head_dim)
+        k = k.view(b, s, n_kv_head, head_dim)
+        v = v.view(b, s, n_kv_head, head_dim)
 
-        # shape: (b * n_head, s, head_dim)
+        # q shape: (b * n_head, s, head_dim)
+        # k/v shape: (b * n_kv_head, s, head_dim)
         q = q.permute(0, 2, 1, 3).reshape(b * n_head, s, head_dim)
-        k = k.permute(0, 2, 1, 3).reshape(b * n_head, s, head_dim)
-        v = v.permute(0, 2, 1, 3).reshape(b * n_head, s, head_dim)
+        k = k.permute(0, 2, 1, 3).reshape(b * n_kv_head, s, head_dim)
+        v = v.permute(0, 2, 1, 3).reshape(b * n_kv_head, s, head_dim)
 
         # Apply RoPE
         q, k = self._apply_rope(q, k, s, rope_theta)
+        k_attn = self._repeat_kv_heads(k, b, n_head, n_kv_head)
+        v_attn = self._repeat_kv_heads(v, b, n_head, n_kv_head)
 
         # shape: (b * n_head, s, s)
-        attn_weights = torch.bmm(q, k.transpose(1, 2))
+        attn_weights = torch.bmm(q, k_attn.transpose(1, 2))
 
         # Causal mask
         idx = torch.arange(s, device=self.dev)
@@ -699,7 +713,7 @@ class TorchDevice:
         attn_weights = F.softmax(attn_weights, dim=2)
         
         # shape: (b, s, h)
-        value = torch.bmm(attn_weights, v).view(b, n_head, s, head_dim)
+        value = torch.bmm(attn_weights, v_attn).view(b, n_head, s, head_dim)
         value = value.transpose(1, 2).reshape(b, s, h)
         value = F.linear(value, w_out.data)
 
@@ -708,9 +722,9 @@ class TorchDevice:
         if donate[0]: inputs.delete()
         if donate[1]: attention_mask.delete()
 
-        # shape: (s, b * n_head, head_dim)
-        k = k.view(b, n_head, s, head_dim).permute(2, 0, 1, 3).reshape(s, b * n_head, head_dim)
-        v = v.view(b, n_head, s, head_dim).permute(2, 0, 1, 3).reshape(s, b * n_head, head_dim)
+        # shape: (s, b * n_kv_head, head_dim)
+        k = k.view(b, n_kv_head, s, head_dim).permute(2, 0, 1, 3).reshape(s, b * n_kv_head, head_dim)
+        v = v.view(b, n_kv_head, s, head_dim).permute(2, 0, 1, 3).reshape(s, b * n_kv_head, head_dim)
 
         if compress_cache:
             k = self.compressed_device.compress(k, comp_config)
@@ -722,7 +736,7 @@ class TorchDevice:
         return TorchTensor.create_from_torch(value, self), k, v
 
     def llama_mha_gen(self, inputs, attention_mask, w_q, w_k, w_v,
-                      w_out, w_ln, n_head, k_cache, v_cache, donate,
+                      w_out, w_ln, n_head, n_kv_head, k_cache, v_cache, donate,
                       attn_sparsity, compress_cache, comp_config,
                       rope_theta=10000.0, eps=1e-5):
         """Llama Multi-head attention (decoding phase) with RoPE and RMSNorm."""
@@ -747,15 +761,17 @@ class TorchDevice:
         k = F.linear(hidden, w_k.data)
         v = F.linear(hidden, w_v.data)
         
-        # shape: (b, 1, n_head, head_dim)
+        # q shape: (b, tgt_s, n_head, head_dim)
+        # k/v shape: (b, tgt_s, n_kv_head, head_dim)
         q = q.view(b, tgt_s, n_head, head_dim)
-        k = k.view(b, tgt_s, n_head, head_dim)
-        v = v.view(b, tgt_s, n_head, head_dim)
+        k = k.view(b, tgt_s, n_kv_head, head_dim)
+        v = v.view(b, tgt_s, n_kv_head, head_dim)
 
-        # shape: (b * n_head, 1, head_dim)
+        # q shape: (b * n_head, tgt_s, head_dim)
+        # k/v shape: (b * n_kv_head, tgt_s, head_dim)
         q = q.permute(0, 2, 1, 3).reshape(b * n_head, tgt_s, head_dim)
-        k_new = k.permute(0, 2, 1, 3).reshape(b * n_head, tgt_s, head_dim)
-        v_new = v.permute(0, 2, 1, 3).reshape(b * n_head, tgt_s, head_dim)
+        k_new = k.permute(0, 2, 1, 3).reshape(b * n_kv_head, tgt_s, head_dim)
+        v_new = v.permute(0, 2, 1, 3).reshape(b * n_kv_head, tgt_s, head_dim)
 
         # Apply RoPE to current tokens
         q_rot, k_rot = self._apply_rope(q, k_new, src_s, rope_theta)
@@ -777,10 +793,11 @@ class TorchDevice:
                 k = torch.cat([k, k_new_cache], dim=0)
                 v = torch.cat([v, v_new_cache], dim=0)
 
+                # Expand grouped-query K/V cache to query-head count for attention.
+                k_attn = self._repeat_kv_heads(k.permute(1, 0, 2), b, n_head, n_kv_head)
+                v_t = self._repeat_kv_heads(v.permute(1, 0, 2), b, n_head, n_kv_head)
                 # shape: (b * n_head, head_dim, s)
-                k_t = k.permute(1, 2, 0)
-                # shape: (b * n_head, s, head_dim)
-                v_t = v.permute(1, 0, 2)
+                k_t = k_attn.permute(0, 2, 1)
 
                 # Attention
                 attn_weights = torch.bmm(q_rot, k_t)

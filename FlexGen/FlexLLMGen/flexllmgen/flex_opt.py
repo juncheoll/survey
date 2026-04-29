@@ -729,15 +729,18 @@ class LlamaSelfAttention:
 
     def init_weight(self, weight_home, path):
         h, dtype = (self.config.input_dim, self.config.dtype)
+        head_dim = h // self.config.n_head
+        n_kv_head = getattr(self.config, "n_kv_head", self.config.n_head)
+        kv_dim = n_kv_head * head_dim
         layer_path = os.path.join(path, f"model.layers.{self.layer_id}.")
         attn_path = layer_path + "self_attn"
         weight_specs = [
             # w_q (q_proj.weight, no bias in Llama)
             ((h, h), dtype, attn_path + ".q_proj.weight"),
             # w_k
-            ((h, h), dtype, attn_path + ".k_proj.weight"),
+            ((kv_dim, h), dtype, attn_path + ".k_proj.weight"),
             # w_v
-            ((h, h), dtype, attn_path + ".v_proj.weight"),
+            ((kv_dim, h), dtype, attn_path + ".v_proj.weight"),
             # w_out (o_proj.weight)
             ((h, h), dtype, attn_path + ".o_proj.weight"),
             # w_ln (input_layernorm.weight)
@@ -756,10 +759,12 @@ class LlamaSelfAttention:
                 w_out.smart_copy(dst1), w_ln.smart_copy(dst2)))
 
     def init_cache_one_gpu_batch(self, cache_home):
-        num_head, hidden_size, prompt_len, gen_len, gpu_batch_size = (
-            self.config.n_head, self.config.input_dim, self.task.prompt_len, self.task.gen_len,
+        num_kv_head, hidden_size, prompt_len, gen_len, gpu_batch_size = (
+            getattr(self.config, "n_kv_head", self.config.n_head),
+            self.config.input_dim, self.task.prompt_len, self.task.gen_len,
             self.policy.gpu_batch_size)
-        shape = (prompt_len + gen_len - 1, gpu_batch_size * num_head, hidden_size // num_head)
+        shape = (prompt_len + gen_len - 1, gpu_batch_size * num_kv_head,
+                 hidden_size // self.config.n_head)
         pin_memory = False
         k_cache = self.attention_compute.allocate(shape, self.config.dtype, pin_memory=pin_memory)
         v_cache = self.attention_compute.allocate(shape, self.config.dtype, pin_memory=pin_memory)
@@ -802,6 +807,7 @@ class LlamaSelfAttention:
     def forward(self, hidden, cache_read_buf, weight_read_buf, attention_mask,
                 cache_write_buf, i, k):
         n_head = self.config.n_head
+        n_kv_head = getattr(self.config, "n_kv_head", n_head)
         rope_theta = getattr(self.config, 'rope_theta', 10000.0)
 
         donate = [False] * 10
@@ -818,7 +824,7 @@ class LlamaSelfAttention:
         if i == 0:  # prefill
             mask, donate[1] = attention_mask.val.smart_copy(self.compute)
             h, new_k_cache, new_v_cache = self.compute.llama_mha(h, mask, w_q, w_k,
-                w_v, w_out, w_ln, n_head, donate,
+                w_v, w_out, w_ln, n_head, n_kv_head, donate,
                 self.policy.compress_cache, self.policy.comp_cache_config, rope_theta,
                 self.config.layer_norm_eps)
             cache_write_buf.store((new_k_cache, new_v_cache))
@@ -826,7 +832,7 @@ class LlamaSelfAttention:
             mask, donate[1] = attention_mask.val.smart_copy(self.attention_compute)
             (k_cache, donate[7]), (v_cache, donate[8]) = cache_read_buf.pop()
             h, new_k_cache, new_v_cache = self.compute.llama_mha_gen(h, mask, w_q,
-                w_k, w_v, w_out, w_ln, n_head,
+                w_k, w_v, w_out, w_ln, n_head, n_kv_head,
                 k_cache, v_cache, donate, self.policy.attn_sparsity,
                 self.policy.compress_cache, self.policy.comp_cache_config, rope_theta,
                 self.config.layer_norm_eps)

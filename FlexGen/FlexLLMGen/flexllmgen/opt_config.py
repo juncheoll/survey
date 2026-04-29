@@ -58,6 +58,7 @@ class LlamaConfig:
     max_seq_len: int = 4096
     hidden_size: int = 4096
     n_head: int = 32
+    n_kv_head: int = 32
     input_dim: int = 4096
     ffn_embed_dim: int = 11008
     pad: int = 0
@@ -72,9 +73,11 @@ class LlamaConfig:
 
     def model_bytes(self):
         h = self.input_dim
+        head_dim = h // self.n_head
+        kv_dim = self.n_kv_head * head_dim
         return 2 * (self.num_hidden_layers * (
-        # self-attention (no bias in llama)
-        h * (3 * h) + h * h +
+        # self-attention (no bias in llama; k/v may use grouped-query heads)
+        h * h + 2 * kv_dim * h + h * h +
         # mlp (gate_proj, up_proj, down_proj; no bias in llama)
         h * self.ffn_embed_dim * 3 +
         # layer norm
@@ -83,7 +86,8 @@ class LlamaConfig:
         self.vocab_size * h * 2 + h)
 
     def cache_bytes(self, batch_size, seq_len):
-        return 2 * batch_size * seq_len * self.num_hidden_layers * self.input_dim * 2
+        head_dim = self.input_dim // self.n_head
+        return 2 * batch_size * seq_len * self.num_hidden_layers * self.n_kv_head * head_dim * 2
 
     def hidden_bytes(self, batch_size, seq_len):
         return batch_size * seq_len * self.input_dim * 2
@@ -177,7 +181,7 @@ def get_llama_config(name, **kwargs):
         arch_name == "llama-2-7b-hf" or
         arch_name == "llama-2-7b" or arch_name == "llama-7b"):
         config = LlamaConfig(name=name,
-            max_seq_len=4096, num_hidden_layers=32, n_head=32,
+            max_seq_len=4096, num_hidden_layers=32, n_head=32, n_kv_head=32,
             hidden_size=4096, input_dim=4096, ffn_embed_dim=11008,
         )
     elif (arch_name == "llama-2-13b-chat-hf" or
@@ -185,12 +189,12 @@ def get_llama_config(name, **kwargs):
           arch_name == "llama-2-13b-hf" or
           arch_name == "llama-2-13b" or arch_name == "llama-13b"):
         config = LlamaConfig(name=name,
-            max_seq_len=4096, num_hidden_layers=40, n_head=40,
+            max_seq_len=4096, num_hidden_layers=40, n_head=40, n_kv_head=40,
             hidden_size=5120, input_dim=5120, ffn_embed_dim=13824,
         )
     elif arch_name == "llama-30b" or arch_name == "llama-30b-hf":
         config = LlamaConfig(name=name,
-            max_seq_len=2048, num_hidden_layers=60, n_head=52,
+            max_seq_len=2048, num_hidden_layers=60, n_head=52, n_kv_head=52,
             hidden_size=6656, input_dim=6656, ffn_embed_dim=17920,
         )
     elif (arch_name == "llama-2-70b-chat-hf" or
@@ -198,12 +202,12 @@ def get_llama_config(name, **kwargs):
           arch_name == "llama-2-70b-hf" or
           arch_name == "llama-2-70b" or arch_name == "llama-70b"):
         config = LlamaConfig(name=name,
-            max_seq_len=4096, num_hidden_layers=80, n_head=64,
+            max_seq_len=4096, num_hidden_layers=80, n_head=64, n_kv_head=8,
             hidden_size=8192, input_dim=8192, ffn_embed_dim=28672,
         )
     elif arch_name == "tinyllama-1.1b-chat-v1.0" or arch_name == "tinyllama":
         config = LlamaConfig(name=name,
-            max_seq_len=2048, num_hidden_layers=22, n_head=32,
+            max_seq_len=2048, num_hidden_layers=22, n_head=32, n_kv_head=4,
             hidden_size=2048, input_dim=2048, ffn_embed_dim=5632,
             vocab_size=32000,
         )
