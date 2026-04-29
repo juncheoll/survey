@@ -6,14 +6,7 @@ N_CORES_PER_GPU=16
 
 MY_IPADDR=$(hostname -i)
 all_public_ips=$(ray get-worker-ips ~/ray_bootstrap_config.yaml)
-for s in $all_public_ips; do
-    ssh -o StrictHostKeyChecking=no $s hostname -i > /tmp/$s.ip &
-done
-wait
-for s in $all_public_ips; do
-    OTHERS_IPADDR+=($(cat /tmp/$s.ip))
-done
-ALL_IPADDR=($MY_IPADDR ${OTHERS_IPADDR[@]})
+ALL_IPADDR=($MY_IPADDR $all_public_ips)
 all_hosts=$(echo ${ALL_IPADDR[@]:0:$N_NODES} | sed 's/ /,/g')
 
 PYTHON_EXEC=$CONDA_PREFIX/bin/python

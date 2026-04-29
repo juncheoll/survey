@@ -18,7 +18,7 @@ from flexllmgen.flex_opt import (Policy, InputEmbed, OutputEmbed, SelfAttention,
                               DUMMY_WEIGHT, LlamaInputEmbed, LlamaOutputEmbed,
                               LlamaSelfAttention, LlamaMLP, LlamaTransformerLayer,
                               LlamaLM)
-from flexllmgen.opt_config import get_model_config
+from flexllmgen.opt_config import get_model_config, download_llama_weights
 from flexllmgen.pytorch_backend import (TorchDevice, TorchDisk, TorchLink,
     TorchMixedDevice, TorchTensor)
 from flexllmgen.timer import timers
@@ -103,6 +103,18 @@ class DistOptLM(OptLM):
 
         self.task = None
         self.init_all_weights()
+
+    def init_weight(self, j):
+        if self.config.model_type != "llama":
+            return super().init_weight(j)
+
+        expanded_path = os.path.abspath(os.path.expanduser(
+            os.path.join(self.path, f"{self.config.name}-np")))
+        check_path = os.path.join(expanded_path, "model.embed_tokens.weight")
+        if not os.path.exists(check_path) and DUMMY_WEIGHT not in check_path:
+            download_llama_weights(self.config.name, self.path)
+
+        self.layers[j].init_weight(self.weight_home[j], expanded_path)
 
     def load_weight(self, b, t, i, j, k):
         # Handle corner cases
@@ -558,7 +570,15 @@ def comm_test(comm_device):
 
 def run_flexllmgen_dist(args):
     t_name = args.model.replace("175b", "66b")
-    tokenizer = AutoTokenizer.from_pretrained(t_name, padding_side="left")
+    model_name_lower = args.model.lower()
+    if "llama" in model_name_lower or "tinyllama" in model_name_lower:
+        tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+    elif args.model == "facebook/galactica-30b":
+        tokenizer = AutoTokenizer.from_pretrained("facebook/galactica-30b", padding_side="left")
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(t_name, padding_side="left")
     num_inner_iterations = args.num_inner_iterations if args.num_inner_iterations is not None else args.world_size
     num_prompts = args.num_gpu_batches * args.gpu_batch_size * num_inner_iterations * 1
     prompt_len, gen_len, cut_gen_len = args.prompt_len, args.gen_len, args.cut_gen_len
@@ -589,7 +609,7 @@ def run_flexllmgen_dist(args):
                                       group_dim=2, symmetric=False))
     assert not (args.compress_cache and args.attn_sparsity < 1.0), "Not implemented"
 
-    config = get_model_config(args.model)
+    config = get_model_config(args.model, pad_token_id=tokenizer.pad_token_id)
     model = DistOptLM(config, env, args.path, policy, args.rank,
                       args.world_size, args.comm_device, num_inner_iterations=num_inner_iterations,
                       async_comm=args.async_comm)
@@ -645,7 +665,7 @@ def run_flexllmgen_dist(args):
     cpu.print_stats()
     projected = args.debug_mode or cut_gen_len
 
-    log_str = (f"model size: {opt_config.model_bytes()/GB:.3f} GB\t"
+    log_str = (f"model size: {config.model_bytes()/GB:.3f} GB\t"
                f"cache size: {cache_size/GB:.3f} GB\t"
                f"hidden size (prefill): {hidden_size/GB:.3f} GB\n"
                f"peak gpu mem: {gpu_peak_mem / GB:.3f} GB\n"

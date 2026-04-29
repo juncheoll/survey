@@ -100,15 +100,9 @@ fi
 
 echo "Head node IP: $MY_IPADDR"
 echo "Worker node IPs: $all_public_ips"
-for s in $all_public_ips; do
-    ssh -o StrictHostKeyChecking=no $s hostname -i > /tmp/$s.ip &
-done
-wait
-for s in $all_public_ips; do
-    OTHERS_IPADDR+=($(cat /tmp/$s.ip))
-done
-ALL_IPADDR=($MY_IPADDR ${OTHERS_IPADDR[@]})
+ALL_IPADDR=($MY_IPADDR $all_public_ips)
 all_hosts=$(echo ${ALL_IPADDR[@]:0:$N_NODES} | sed 's/ /,/g')
+echo "MPI hosts: $all_hosts"
 
 PYTHON_EXEC=$VENV_PYTHON
 PYTHON_SCRIPT=flexllmgen.dist_flex_opt
@@ -132,4 +126,3 @@ mpirun \
     --percent 100 0 100 0 100 0 \
     --comm-device gpu \
     --async-comm
-
