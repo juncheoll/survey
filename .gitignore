@@ -12,3 +12,12 @@ wheels/
 # logs
 logs/
 *.log
+
+# Local PRIMA dependencies, models, and build artifacts
+prima/HiGHS/
+prima/download/
+prima/**/*.gguf
+prima/**/*.gguf.*
+prima/**/CMakeCache.txt
+prima/**/CMakeFiles/
+prima/**/cmake-build-*/

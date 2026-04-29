@@ -7,3 +7,17 @@ docker tag zero_inference:cu128 k55369504/zero_inference:cu128
 ```
 docker push k55369504/zero_inference:cu128
 ``` 
+
+### model list
+```
+facebook/opt-6.7b
+facebook/opt-13b
+facebook/opt-30b
+facebook/opt-66b
+
+
+meta-llama/Llama-2-7b-hf
+meta-llama/Llama-2-13b-hf
+huggyllama/llama-30b
+meta-llama/Llama-2-70b-hf
+```
