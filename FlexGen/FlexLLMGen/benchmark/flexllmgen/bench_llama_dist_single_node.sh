@@ -5,7 +5,33 @@ all_hosts=$MY_IPADDR
 N_GPUS=4
 N_CORES_PER_GPU=4
 
-PYTHON_EXEC=$CONDA_PREFIX/bin/python
+# Detect virtual environment (uv venv or conda)
+if [ -n "$VIRTUAL_ENV" ]; then
+    VENV_PYTHON=$VIRTUAL_ENV/bin/python
+elif [ -n "$CONDA_PREFIX" ]; then
+    VENV_PYTHON=$CONDA_PREFIX/bin/python
+elif [ -d ".venv/bin" ]; then
+    VENV_PYTHON=$(pwd)/.venv/bin/python
+elif [ -d "venv/bin" ]; then
+    VENV_PYTHON=$(pwd)/venv/bin/python
+else
+    echo "Error: No virtual environment detected!"
+    echo "Please activate uv venv or conda environment first:"
+    echo "  source .venv/bin/activate  (for uv venv)"
+    echo "  conda activate flexllmgen  (for conda)"
+    exit 1
+fi
+
+# Verify Python executable exists
+if [ ! -f "$VENV_PYTHON" ]; then
+    echo "Error: Python executable not found at $VENV_PYTHON"
+    exit 1
+fi
+
+echo "Using Python: $VENV_PYTHON"
+echo "Python version: $($VENV_PYTHON --version)"
+
+PYTHON_EXEC=$VENV_PYTHON
 PYTHON_SCRIPT=flexllmgen.dist_flex_opt
 
 # Default Llama model

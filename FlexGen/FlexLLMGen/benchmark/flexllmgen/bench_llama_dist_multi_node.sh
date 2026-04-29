@@ -7,6 +7,32 @@ N_CORES_PER_GPU=16
 # Default Llama model
 MODEL=${1:-huggyllama/llama-7b}
 
+# Detect virtual environment (uv venv or conda)
+if [ -n "$VIRTUAL_ENV" ]; then
+    VENV_PYTHON=$VIRTUAL_ENV/bin/python
+elif [ -n "$CONDA_PREFIX" ]; then
+    VENV_PYTHON=$CONDA_PREFIX/bin/python
+elif [ -d ".venv/bin" ]; then
+    VENV_PYTHON=$(pwd)/.venv/bin/python
+elif [ -d "venv/bin" ]; then
+    VENV_PYTHON=$(pwd)/venv/bin/python
+else
+    echo "Error: No virtual environment detected!"
+    echo "Please activate uv venv or conda environment first:"
+    echo "  source .venv/bin/activate  (for uv venv)"
+    echo "  conda activate flexllmgen  (for conda)"
+    exit 1
+fi
+
+# Verify Python executable exists
+if [ ! -f "$VENV_PYTHON" ]; then
+    echo "Error: Python executable not found at $VENV_PYTHON"
+    exit 1
+fi
+
+echo "Using Python: $VENV_PYTHON"
+echo "Python version: $($VENV_PYTHON --version)"
+
 MY_IPADDR=$(hostname -i)
 all_public_ips=$(ray get-worker-ips ~/ray_bootstrap_config.yaml)
 for s in $all_public_ips; do
@@ -19,7 +45,7 @@ done
 ALL_IPADDR=($MY_IPADDR ${OTHERS_IPADDR[@]})
 all_hosts=$(echo ${ALL_IPADDR[@]:0:$N_NODES} | sed 's/ /,/g')
 
-PYTHON_EXEC=$CONDA_PREFIX/bin/python
+PYTHON_EXEC=$VENV_PYTHON
 PYTHON_SCRIPT=flexllmgen.dist_flex_opt
 
 pgrep -fl python | awk '!/dist_flex_opt\.py/{print $1}' | xargs sudo kill

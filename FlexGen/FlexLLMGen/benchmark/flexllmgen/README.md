@@ -43,6 +43,20 @@ python3 bench_suite.py 175b_1x1_comp
 sudo apt install openmpi-bin
 ```
 
+### Environment Setup
+
+**Important**: Activate your virtual environment BEFORE running any benchmark scripts:
+
+```bash
+# For uv venv
+source .venv/bin/activate
+
+# For conda
+conda activate flexllmgen
+```
+
+The scripts will automatically detect and use the activated Python environment. Without activation, scripts may use system Python or `~/.local` packages, leading to incorrect behavior.
+
 ### OPT-6.7B
 ```
 # 1 node with 4 GPUs
