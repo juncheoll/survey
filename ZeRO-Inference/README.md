@@ -36,5 +36,7 @@ except Exception:
 
 ### run ZeRO-Inference
 ```
-python3 run_model.py --model facebook/opt-13b --batch-size 8 --prompt-len 512 --gen-len 32 --cpu-offload --kv-offload
+deepspeed --num_gpus 1 run_model.py --dummy --model facebook/opt-13b --batch-size 8 --prompt-len 512 --gen-len 32 --cpu-offload --kv-offload
+
+deepspeed --num_gpus 1 run_model.py --dummy --model facebook/opt-66b --batch-size 8 --prompt-len 512 --gen-len 32 --cpu-offload --kv-offload --quant_bits
 ```
