@@ -114,6 +114,8 @@ You can run the examples in this paper, ['Can Foundation Models Wrangle Your Dat
 If you have multiple machines with GPUs, FlexLLMGen can combine offloading with pipeline parallelism to allow scaling.
 For example, if you have 2 GPUs but the aggregated GPU memory is less than the model size, you still need offloading. FlexLLMGen allow you to do pipeline parallelism with these 2 GPUs to accelerate the generation.
 But to have scaled performance, you should have GPUs on distributed machines.
+
+**Supported Models**: FlexLLMGen supports both OPT and Llama model families for distributed GPU execution.
 See examples [here](https://github.com/FMInference/FlexLLMGen/tree/main/benchmark/flexllmgen#distributed-gpus).
 
 ### API Example

@@ -8,6 +8,9 @@ N_CORES_PER_GPU=4
 PYTHON_EXEC=$CONDA_PREFIX/bin/python
 PYTHON_SCRIPT=flexllmgen.dist_flex_opt
 
+# Default model
+MODEL=${1:-facebook/opt-1.3b}
+
 pgrep -fl python | awk '!/dist_flex_opt\.py/{print $1}' | xargs sudo kill
 
 set -x
@@ -21,7 +24,7 @@ mpirun \
     --head-ip $MY_IPADDR \
     --port 7777 \
     --use-mpi \
-    --model facebook/opt-1.3b \
+    --model $MODEL \
     --gpu-batch-size 16 \
     --percent 100 0 100 0 100 0 \
     --comm-device gpu

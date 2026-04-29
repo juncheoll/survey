@@ -1,26 +1,15 @@
 #!/bin/bash
 
-N_GPUS=1
-N_NODES=4
-N_CORES_PER_GPU=16
-
-# Default model
-MODEL=${1:-facebook/opt-1.3b}
-
 MY_IPADDR=$(hostname -i)
-all_public_ips=$(ray get-worker-ips ~/ray_bootstrap_config.yaml)
-for s in $all_public_ips; do
-    ssh -o StrictHostKeyChecking=no $s hostname -i > /tmp/$s.ip &
-done
-wait
-for s in $all_public_ips; do
-    OTHERS_IPADDR+=($(cat /tmp/$s.ip))
-done
-ALL_IPADDR=($MY_IPADDR ${OTHERS_IPADDR[@]})
-all_hosts=$(echo ${ALL_IPADDR[@]:0:$N_NODES} | sed 's/ /,/g')
+all_hosts=$MY_IPADDR
+N_GPUS=4
+N_CORES_PER_GPU=4
 
 PYTHON_EXEC=$CONDA_PREFIX/bin/python
 PYTHON_SCRIPT=flexllmgen.dist_flex_opt
+
+# Default Llama model
+MODEL=${1:-huggyllama/llama-7b}
 
 pgrep -fl python | awk '!/dist_flex_opt\.py/{print $1}' | xargs sudo kill
 
@@ -36,9 +25,7 @@ mpirun \
     --port 7777 \
     --use-mpi \
     --model $MODEL \
-    --gpu-batch-size 16 \
-    --num-gpu-batches 2 \
+    --gpu-batch-size 8 \
     --percent 100 0 100 0 100 0 \
     --comm-device gpu \
     --async-comm
-

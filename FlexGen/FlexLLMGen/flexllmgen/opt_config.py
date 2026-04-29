@@ -28,6 +28,7 @@ class OptConfig:
     vocab_size: int = 50272
     layer_norm_eps: float = 0.00001
     pad_token_id: int = 1
+    model_type: str = "opt"
     dtype: type = np.float16
     model_type: str = "opt"
 

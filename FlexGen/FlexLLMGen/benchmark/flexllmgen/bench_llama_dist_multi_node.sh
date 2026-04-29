@@ -4,8 +4,8 @@ N_GPUS=1
 N_NODES=4
 N_CORES_PER_GPU=16
 
-# Default model
-MODEL=${1:-facebook/opt-1.3b}
+# Default Llama model
+MODEL=${1:-huggyllama/llama-7b}
 
 MY_IPADDR=$(hostname -i)
 all_public_ips=$(ray get-worker-ips ~/ray_bootstrap_config.yaml)
@@ -36,9 +36,8 @@ mpirun \
     --port 7777 \
     --use-mpi \
     --model $MODEL \
-    --gpu-batch-size 16 \
+    --gpu-batch-size 8 \
     --num-gpu-batches 2 \
     --percent 100 0 100 0 100 0 \
     --comm-device gpu \
     --async-comm
-

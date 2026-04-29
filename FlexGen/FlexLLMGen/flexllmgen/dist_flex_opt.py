@@ -15,8 +15,10 @@ from flexllmgen.dist_utils import initialize_distributed
 from flexllmgen.flex_opt import (Policy, InputEmbed, OutputEmbed, SelfAttention,
                               MLP, TransformerLayer, OptLM, get_filename,
                               add_parser_arguments, get_test_inputs,
-                              DUMMY_WEIGHT)
-from flexllmgen.opt_config import get_opt_config
+                              DUMMY_WEIGHT, LlamaInputEmbed, LlamaOutputEmbed,
+                              LlamaSelfAttention, LlamaMLP, LlamaTransformerLayer,
+                              LlamaLM)
+from flexllmgen.opt_config import get_model_config
 from flexllmgen.pytorch_backend import (TorchDevice, TorchDisk, TorchLink,
     TorchMixedDevice, TorchTensor)
 from flexllmgen.timer import timers
@@ -48,8 +50,15 @@ class DistOptLM(OptLM):
             raise ValueError(f"Invalid comm_device: {comm_device}")
 
         layers = []
+        # Check if this is a Llama model
+        is_llama = self.config.model_type == 'llama'
+        
         if pipeline_rank == 0:
-            layers.append(InputEmbed(self.config, self.env, self.policy))
+            if is_llama:
+                layers.append(LlamaInputEmbed(self.config, self.env, self.policy))
+            else:
+                layers.append(InputEmbed(self.config, self.env, self.policy))
+        
         pipeline_stage_sizes = [config.num_hidden_layers // num_pipeline_stages
                                 + int(i < config.num_hidden_layers % num_pipeline_stages)
                                 for i in range(num_pipeline_stages)]
@@ -58,12 +67,23 @@ class DistOptLM(OptLM):
             layer_start_ids.append(layer_start_ids[-1] + stage_size)
         for i in range(layer_start_ids[pipeline_rank], layer_start_ids[pipeline_rank + 1]):
             if self.policy.sep_layer:
-                layers.append(SelfAttention(self.config, self.env, self.policy, i))
-                layers.append(MLP(self.config, self.env, self.policy, i))
+                if is_llama:
+                    layers.append(LlamaSelfAttention(self.config, self.env, self.policy, i))
+                    layers.append(LlamaMLP(self.config, self.env, self.policy, i))
+                else:
+                    layers.append(SelfAttention(self.config, self.env, self.policy, i))
+                    layers.append(MLP(self.config, self.env, self.policy, i))
             else:
-                layers.append(TransformerLayer(self.config, self.env, self.policy, i))
+                if is_llama:
+                    layers.append(LlamaTransformerLayer(self.config, self.env, self.policy, i))
+                else:
+                    layers.append(TransformerLayer(self.config, self.env, self.policy, i))
+        
         if pipeline_rank == num_pipeline_stages - 1:
-            layers.append(OutputEmbed(self.config, self.env, self.policy))
+            if is_llama:
+                layers.append(LlamaOutputEmbed(self.config, self.env, self.policy))
+            else:
+                layers.append(OutputEmbed(self.config, self.env, self.policy))
         self.layers = layers
         self.num_layers = len(layers)
 
@@ -569,13 +589,13 @@ def run_flexllmgen_dist(args):
                                       group_dim=2, symmetric=False))
     assert not (args.compress_cache and args.attn_sparsity < 1.0), "Not implemented"
 
-    opt_config = get_opt_config(args.model)
-    model = DistOptLM(opt_config, env, args.path, policy, args.rank,
+    config = get_model_config(args.model)
+    model = DistOptLM(config, env, args.path, policy, args.rank,
                       args.world_size, args.comm_device, num_inner_iterations=num_inner_iterations,
                       async_comm=args.async_comm)
-    cache_size = opt_config.cache_bytes(num_prompts, prompt_len + gen_len)
-    hidden_size = opt_config.hidden_bytes(num_prompts, prompt_len + gen_len)
-    print(f"model size: {opt_config.model_bytes()/GB:.3f} GB, "
+    cache_size = config.cache_bytes(num_prompts, prompt_len + gen_len)
+    hidden_size = config.hidden_bytes(num_prompts, prompt_len + gen_len)
+    print(f"model size: {config.model_bytes()/GB:.3f} GB, "
           f"cache size: {cache_size/GB:.3f} GB, "
           f"hidden size (prefill): {hidden_size/GB:.3f} GB")
 

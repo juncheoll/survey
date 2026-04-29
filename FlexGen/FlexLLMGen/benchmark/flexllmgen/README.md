@@ -69,3 +69,12 @@ bash bench_175b_1x4.sh
 # 4 nodes and one GPU per node
 bash bench_175b_4x1.sh
 ```
+
+### Llama-7B
+```
+# 1 node with 4 GPUs
+bash bench_llama_dist_single_node.sh
+
+# 4 nodes and one GPU per node
+bash bench_llama_dist_multi_node.sh
+```
