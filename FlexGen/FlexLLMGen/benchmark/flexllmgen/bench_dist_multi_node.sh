@@ -64,36 +64,37 @@ fi
 echo "Getting worker IPs from Ray cluster..."
 MY_IPADDR=$(hostname -i)
 
-# Try to get worker IPs - works if Ray cluster is running locally or via RAY_ADDRESS env var
-if [ -f ~/ray_bootstrap_config.yaml ]; then
-    # Use bootstrap config if it exists - use $RAY_EXEC from venv
-    all_public_ips=$($RAY_EXEC get-worker-ips ~/ray_bootstrap_config.yaml 2>/dev/null)
+# Prefer `ray list nodes` for an already-running cluster.
+# `ray get-worker-ips` requires a cluster config file, so only use it as a fallback.
+all_public_ips=""
+if [ -n "$RAY_ADDRESS" ]; then
+    all_node_ips=$($RAY_EXEC list nodes --address="$RAY_ADDRESS" 2>/dev/null | awk '/^[[:space:]]*[0-9]+[[:space:]]/ {print $3}')
 else
-    # Try to get from running cluster (requires RAY_ADDRESS or local cluster)
-    # RAY_ADDRESS can be set like: export RAY_ADDRESS=HEAD_IP:6379
-    all_public_ips=$($RAY_EXEC get-worker-ips 2>/dev/null)
-    
-    if [ -z "$all_public_ips" ]; then
-        # If still no worker IPs, try with explicit ray address
-        if [ -z "$RAY_ADDRESS" ]; then
-            echo "Error: Could not get worker IPs from Ray cluster"
-            echo ""
-            echo "Solutions:"
-            echo "1. Start Ray cluster and set RAY_ADDRESS environment variable:"
-            echo "   export RAY_ADDRESS=HEAD_IP:6379"
-            echo ""
-            echo "2. Or create ~/ray_bootstrap_config.yaml with your cluster info"
-            echo ""
-            echo "3. Or provide Ray address as environment variable before running:"
-            echo "   RAY_ADDRESS=HEAD_IP:6379 ./bench_dist_multi_node.sh"
-            exit 1
-        fi
+    all_node_ips=$($RAY_EXEC list nodes 2>/dev/null | awk '/^[[:space:]]*[0-9]+[[:space:]]/ {print $3}')
+fi
+
+for ip in $all_node_ips; do
+    if [ "$ip" != "$MY_IPADDR" ]; then
+        all_public_ips="$all_public_ips $ip"
+    fi
+done
+
+if [ -z "$all_public_ips" ]; then
+    if [ -f ~/ray_bootstrap_config.yaml ]; then
+        all_public_ips=$($RAY_EXEC get-worker-ips ~/ray_bootstrap_config.yaml 2>/dev/null)
     fi
 fi
 
 if [ -z "$all_public_ips" ]; then
-    echo "Error: Could not get worker IPs from Ray cluster at $RAY_ADDRESS"
-    echo "Make sure Ray cluster is running: ray status"
+    echo "Error: Could not get worker IPs from Ray cluster"
+    echo ""
+    echo "Solutions:"
+    echo "1. Start Ray cluster and set RAY_ADDRESS environment variable:"
+    echo "   export RAY_ADDRESS=HEAD_IP:6379"
+    echo ""
+    echo "2. Or create ~/ray_bootstrap_config.yaml with your cluster info"
+    echo ""
+    echo "3. Or run a connected cluster and retry."
     exit 1
 fi
 
