@@ -57,6 +57,45 @@ conda activate flexllmgen
 
 The scripts will automatically detect and use the activated Python environment. Without activation, scripts may use system Python or `~/.local` packages, leading to incorrect behavior.
 
+### Multi-Node Setup (Required for 4x1 benchmarks)
+
+**Important: Run benchmark scripts ONLY on the HEAD NODE. MPI will automatically distribute work to all worker nodes.**
+
+The scripts require a running Ray cluster. You have two options:
+
+**Option 1: Use RAY_ADDRESS environment variable (Recommended - No YAML needed)**
+
+```bash
+# On head node, start Ray
+ray start --head --port=6379
+
+# On each worker node, join the cluster
+ray start --address='HEAD_IP:6379'
+
+# Then run benchmark ONLY on head node with RAY_ADDRESS environment variable
+export RAY_ADDRESS=HEAD_IP:6379
+./bench_llama_dist_multi_node.sh  # <-- RUN ON HEAD NODE ONLY
+```
+
+**Option 2: Use bootstrap config file** (Optional)
+
+Create `~/ray_bootstrap_config.yaml`:
+```yaml
+cluster_name: flexllmgen
+provider:
+  type: local
+```
+
+Then run on head node:
+```bash
+./bench_llama_dist_multi_node.sh  # <-- RUN ON HEAD NODE ONLY
+```
+
+**Verify cluster is running**:
+```bash
+ray status
+```
+
 ### OPT-6.7B
 ```
 # 1 node with 4 GPUs
