@@ -1669,15 +1669,17 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
 
     llama_init_result iparams;
     auto mparams = llama_model_params_from_gpt_params(params);
+    auto mparams_meta = mparams;
+    mparams_meta.vocab_only = true;
 
     struct llama_model * model = nullptr;
 
     if (!params.hf_repo.empty() && !params.hf_file.empty()) {
-        model = llama_load_model_from_hf(params.hf_repo.c_str(), params.hf_file.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams);
+        model = llama_load_model_from_hf(params.hf_repo.c_str(), params.hf_file.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams_meta);
     } else if (!params.model_url.empty()) {
-        model = llama_load_model_from_url(params.model_url.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams);
+        model = llama_load_model_from_url(params.model_url.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams_meta);
     } else {
-        model = llama_load_model_from_file(params.model.c_str(), mparams);
+        model = llama_load_model_from_file(params.model.c_str(), mparams_meta);
     }
 
     if (model == NULL) {

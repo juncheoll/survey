@@ -20,6 +20,34 @@ def post_json(url, payload, timeout):
         return json.loads(resp.read().decode("utf-8"))
 
 
+def get_json(url, timeout):
+    req = urllib.request.Request(url, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def wait_until_ready(base_url, startup_timeout, request_timeout):
+    deadline = time.perf_counter() + startup_timeout
+    health_url = base_url.rstrip("/") + "/health"
+    last_error = None
+
+    while time.perf_counter() < deadline:
+        try:
+            data = get_json(health_url, request_timeout)
+            if data.get("status") == "ok":
+                return
+        except urllib.error.HTTPError as exc:
+            last_error = f"HTTP {exc.code}: {exc.reason}"
+            if exc.code != 503:
+                raise
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            last_error = str(exc)
+
+        time.sleep(1.0)
+
+    raise TimeoutError(f"server did not become ready within {startup_timeout:.0f}s; last error: {last_error}")
+
+
 def tokenize(base_url, prompt, timeout):
     data = post_json(
         base_url.rstrip("/") + "/tokenize",
@@ -103,7 +131,10 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--timeout", type=float, default=600.0)
+    parser.add_argument("--startup-timeout", type=float, default=600.0, help="seconds to wait for /health before benchmarking")
     args = parser.parse_args()
+
+    wait_until_ready(args.url, args.startup_timeout, min(args.timeout, 30.0))
 
     prompt, actual_prompt_tokens = make_prompt(args.url, args.input_tokens, args.timeout)
     print(

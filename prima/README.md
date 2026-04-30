@@ -21,6 +21,13 @@ wget https://huggingface.co/bartowski/opt-1.3b-GGUF/resolve/main/opt-30b.Q4_K_M.
 ```
 
 
+#### required pacakge
+```
+sudo apt update
+sudo apt install -y fio libzmq3-dev
+```
+
+
 #### install HiGHS from source
 ```
 git clone https://github.com/ERGO-Code/HiGHS.git
@@ -64,15 +71,17 @@ hf download TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_0.gguf
 ```
 # rank 0
 CUDA_VISIBLE_DEVICES=0 ./llama-server \
-  -m model.gguf -c 4096 \
-  --world 2 --rank 0 --master 127.0.0.1 --next 127.0.0.1 --prefetch \
+  -m ~/.cache/huggingface/hub/models--TheBloke--Llama-2-7B-GGUF/snapshots/b4e04e128f421c93a5f1e34ac4d7ca9b0af47b80/llama-2-7b.Q4_0.gguf -c 4096 \
+  --world 2 --rank 0 --master 192.168.79.22 --next 192.168.79.4 --prefetch \
+  -lw "16,16" -ngl 16 \
   --host 127.0.0.1 --port 8080 \
   -np 4 --cont-batching
 
 # rank 1
-CUDA_VISIBLE_DEVICES=1 ./llama-cli \
-  -m model.gguf \
-  --world 2 --rank 1 --master 127.0.0.1 --next 127.0.0.1 --prefetch
+CUDA_VISIBLE_DEVICES=0 ./llama-cli \
+  -m ~/.cache/huggingface/hub/models--TheBloke--Llama-2-7B-GGUF/snapshots/b4e04e128f421c93a5f1e34ac4d7ca9b0af47b80/llama-2-7b.Q4_0.gguf \
+  --world 2 --rank 1 --master 192.168.79.22 --next 192.168.79.22 --prefetch \
+  -ngl 16
 
 
 python3 bench_prima_server.py \
