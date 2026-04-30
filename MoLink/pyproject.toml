@@ -1,0 +1,12 @@
+[project]
+name = "molink-env"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "molink",
+]
+
+[tool.uv.sources]
+molink = { path = "MoLink", editable = true }

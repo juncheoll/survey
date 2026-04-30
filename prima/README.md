@@ -86,10 +86,10 @@ python3 convert_hf_to_gguf.py models/Llama-2-7b-hf --outtype f16
 # rank 0
 CUDA_VISIBLE_DEVICES=0 ./llama-server \
   -m ~/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/01c7f73d771dfac7d292323805ebc428287df4f9/Llama-2-7B-hf-F16.gguf \
-  -c 2048 \
+  -c 5120 \
   --world 2 --rank 0 --master 192.168.79.22 --next 192.168.79.4 --prefetch \
   --host 127.0.0.1 --port 8080 \
-  -np 64 --cont-batching \
+  -np 4 --cont-batching \
   -lw "40,20" -ngl 40
 
 # rank 1

@@ -1,0 +1,1 @@
+from .worker.workermixin import MolinkWorkerMixin
