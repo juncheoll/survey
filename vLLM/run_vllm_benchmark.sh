@@ -14,7 +14,7 @@ SERVE_HOST="${SERVE_HOST:-0.0.0.0}"
 SERVE_PORT="${SERVE_PORT:-8000}"
 BENCH_HOST="${BENCH_HOST:-127.0.0.1}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
-MAX_NUM_SEQS="${MAX_NUM_SEQS:-64}"
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.90}"
 PIPELINE_PARALLEL_SIZE="${PIPELINE_PARALLEL_SIZE:-auto}"
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-auto}"
@@ -25,7 +25,7 @@ NUM_PROMPTS="${NUM_PROMPTS:-64}"
 RANDOM_INPUT_LEN="${RANDOM_INPUT_LEN:-1024}"
 RANDOM_OUTPUT_LEN="${RANDOM_OUTPUT_LEN:-512}"
 REQUEST_RATE="${REQUEST_RATE:-inf}"
-MAX_CONCURRENCY="${MAX_CONCURRENCY:-64}"
+MAX_CONCURRENCIES="${MAX_CONCURRENCIES:-1 2 4 8 16 32 64 128 256}"
 VLLM_EXTRA_SERVE_ARGS="${VLLM_EXTRA_SERVE_ARGS:-}"
 VLLM_EXTRA_BENCH_ARGS="${VLLM_EXTRA_BENCH_ARGS:-}"
 
@@ -97,12 +97,17 @@ if [[ "$PARALLEL_WORLD_SIZE" -ne "$TOTAL_GPUS" ]]; then
   echo "Warning: TP x PP = $PARALLEL_WORLD_SIZE, but host slots total = $TOTAL_GPUS" >&2
 fi
 
+# shellcheck disable=SC2206
+CONCURRENCY_LIST=($MAX_CONCURRENCIES)
+if [[ "${#CONCURRENCY_LIST[@]}" -eq 0 ]]; then
+  echo "MAX_CONCURRENCIES must contain at least one number. Got: $MAX_CONCURRENCIES" >&2
+  exit 2
+fi
+
 RUN_ID="$(date +"%Y%m%d-%H%M%S")"
 RUN_LOG_DIR="$LOG_DIR/$RUN_ID"
 SUMMARY_LOG="$RUN_LOG_DIR/summary.tsv"
 SERVER_LOG="$RUN_LOG_DIR/server.stdout.log"
-BENCH_LOG="$RUN_LOG_DIR/bench.stdout.log"
-RESULT_JSON="$RUN_LOG_DIR/bench_result.json"
 mkdir -p "$RUN_LOG_DIR"
 
 cleanup() {
@@ -141,12 +146,12 @@ fi
   echo "# pipeline_parallel_size: $PIPELINE_PARALLEL_SIZE"
   echo "# parallel_world_size: $PARALLEL_WORLD_SIZE"
   echo "# max_model_len: $MAX_MODEL_LEN"
-  echo "# max_num_seqs: $MAX_NUM_SEQS"
+  echo "# max_num_seqs: ${MAX_NUM_SEQS:-vllm_default}"
   echo "# random_input_len: $RANDOM_INPUT_LEN"
   echo "# random_output_len: $RANDOM_OUTPUT_LEN"
   echo "# num_prompts: $NUM_PROMPTS"
-  echo "# max_concurrency: $MAX_CONCURRENCY"
-  printf "started_at\tended_at\tduration_sec\tmodel\tstatus\texit_code\tserver_log\tbench_log\tresult_json\n"
+  echo "# max_concurrencies: ${CONCURRENCY_LIST[*]}"
+  printf "started_at\tended_at\tduration_sec\tmodel\tmax_concurrency\tstatus\texit_code\tserver_log\tbench_log\tresult_json\n"
 } > "$SUMMARY_LOG"
 
 # shellcheck disable=SC2206
@@ -163,10 +168,14 @@ serve_cmd=(
   --host "$SERVE_HOST"
   --port "$SERVE_PORT"
   --max-model-len "$MAX_MODEL_LEN"
-  --max-num-seqs "$MAX_NUM_SEQS"
   --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"
-  "${SERVE_EXTRA[@]}"
 )
+
+if [[ -n "$MAX_NUM_SEQS" ]]; then
+  serve_cmd+=(--max-num-seqs "$MAX_NUM_SEQS")
+fi
+
+serve_cmd+=("${SERVE_EXTRA[@]}")
 
 echo "[serve] starting vLLM server"
 {
@@ -203,51 +212,61 @@ do
   sleep 5
 done
 
-bench_cmd=(
-  vllm bench serve
-  --backend openai
-  --model "$SERVED_MODEL_NAME"
-  --base-url "http://$BENCH_HOST:$SERVE_PORT"
-  --endpoint /v1/completions
-  --dataset-name random
-  --num-prompts "$NUM_PROMPTS"
-  --random-input-len "$RANDOM_INPUT_LEN"
-  --random-output-len "$RANDOM_OUTPUT_LEN"
-  --random-range-ratio 0
-  --request-rate "$REQUEST_RATE"
-  --max-concurrency "$MAX_CONCURRENCY"
-  --save-result
-  --result-dir "$RUN_LOG_DIR"
-  --result-filename "$(basename "$RESULT_JSON")"
-  "${BENCH_EXTRA[@]}"
-)
+failed=0
 
-started_at="$(date -Iseconds)"
-started_sec="$(date +%s)"
-echo "[bench] running benchmark"
-{
-  printf "# command:"
-  printf " %q" "${bench_cmd[@]}"
-  echo
-  echo
-  "${bench_cmd[@]}"
-} > "$BENCH_LOG" 2>&1
-exit_code=$?
-ended_at="$(date -Iseconds)"
-ended_sec="$(date +%s)"
-duration_sec=$((ended_sec - started_sec))
+for max_concurrency in "${CONCURRENCY_LIST[@]}"; do
+  bench_log="$RUN_LOG_DIR/bench_concurrency_${max_concurrency}.stdout.log"
+  result_json="$RUN_LOG_DIR/bench_concurrency_${max_concurrency}.json"
 
-if [[ "$exit_code" -eq 0 ]]; then
-  status="success"
-  echo "[bench] success (${duration_sec}s)"
-else
-  status="failed"
-  echo "[bench] failed (${duration_sec}s, exit_code=$exit_code)"
-fi
+  bench_cmd=(
+    vllm bench serve
+    --backend openai
+    --model "$SERVED_MODEL_NAME"
+    --base-url "http://$BENCH_HOST:$SERVE_PORT"
+    --endpoint /v1/completions
+    --dataset-name random
+    --num-prompts "$NUM_PROMPTS"
+    --random-input-len "$RANDOM_INPUT_LEN"
+    --random-output-len "$RANDOM_OUTPUT_LEN"
+    --random-range-ratio 0
+    --request-rate "$REQUEST_RATE"
+    --max-concurrency "$max_concurrency"
+    --save-result
+    --result-dir "$RUN_LOG_DIR"
+    --result-filename "$(basename "$result_json")"
+    "${BENCH_EXTRA[@]}"
+  )
 
-printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-  "$started_at" "$ended_at" "$duration_sec" "$MODEL" "$status" "$exit_code" \
-  "$SERVER_LOG" "$BENCH_LOG" "$RESULT_JSON" >> "$SUMMARY_LOG"
+  started_at="$(date -Iseconds)"
+  started_sec="$(date +%s)"
+  echo "[bench] running benchmark max_concurrency=$max_concurrency"
+  {
+    printf "# command:"
+    printf " %q" "${bench_cmd[@]}"
+    echo
+    echo
+    "${bench_cmd[@]}"
+  } > "$bench_log" 2>&1
+  exit_code=$?
+  ended_at="$(date -Iseconds)"
+  ended_sec="$(date +%s)"
+  duration_sec=$((ended_sec - started_sec))
+
+  if [[ "$exit_code" -eq 0 ]]; then
+    status="success"
+    echo "[bench] success max_concurrency=$max_concurrency (${duration_sec}s)"
+  else
+    status="failed"
+    failed=$((failed + 1))
+    echo "[bench] failed max_concurrency=$max_concurrency (${duration_sec}s, exit_code=$exit_code)"
+  fi
+
+  printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+    "$started_at" "$ended_at" "$duration_sec" "$MODEL" "$max_concurrency" "$status" "$exit_code" \
+    "$SERVER_LOG" "$bench_log" "$result_json" >> "$SUMMARY_LOG"
+done
 
 echo "[done] summary: $SUMMARY_LOG"
-exit "$exit_code"
+if [[ "$failed" -gt 0 ]]; then
+  exit 1
+fi

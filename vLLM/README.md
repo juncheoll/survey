@@ -67,11 +67,14 @@ Defaults:
 - `RANDOM_INPUT_LEN=1024`
 - `RANDOM_OUTPUT_LEN=512`
 - `NUM_PROMPTS=64`
-- `MAX_CONCURRENCY=64`
+- `MAX_CONCURRENCIES="1 2 4 8"`
+- `MAX_NUM_SEQS` is unset by default, so vLLM uses its own server-side default.
 
 Useful overrides:
 - `RUN_RAY_SETUP=0`: reuse an existing Ray cluster.
 - `RAY_STOP_FIRST=0`: do not stop existing Ray processes during setup.
+- `MAX_CONCURRENCIES="16 32 64"`: sweep benchmark concurrency values.
+- `MAX_NUM_SEQS=64`: explicitly set vLLM server-side max sequences.
 - `SSH_PORT=2222`: use the same non-default SSH port for every worker.
 - `VLLM_EXTRA_SERVE_ARGS="..."`: append extra args to `vllm serve`.
 - `VLLM_EXTRA_BENCH_ARGS="..."`: append extra args to `vllm bench serve`.
