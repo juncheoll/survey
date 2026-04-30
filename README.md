@@ -41,3 +41,22 @@ Useful overrides:
 - `LOG_DIR=/path/to/logs`: change orchestration log location.
 
 The wrapper writes `summary.tsv` and per-framework stdout logs under `logs/single_node/<run-id>` unless `/logs` is writable.
+
+### multi-node benchmark automation
+Runs the multi-node benchmark scripts for vLLM, FlexGen, and MoLink in sequence.
+
+```
+HOSTFILE=./hostfile HEAD_ADDRESS=192.168.79.22 ./run_multi_node_benchmarks.sh
+```
+
+Useful overrides:
+- `FRAMEWORKS="vLLM FlexGen"`: select frameworks.
+- `STOP_ON_FAILURE=1`: stop after the first failed framework.
+- `LOG_DIR=/path/to/logs`: change orchestration log location.
+- `VLLM_HOSTFILE=./hosts_4gpu`: hostfile only for vLLM.
+- `FLEXGEN_HOSTFILE=./hosts_4gpu`: hostfile only for FlexGen.
+- `MOLINK_HOSTFILE=./hosts_1gpu`: hostfile only for MoLink.
+
+The wrapper passes `HEAD_ADDRESS` and `HEAD_IP` to child scripts. If only one is set, it reuses that value for the other. MoLink is still run as a multi-node pipeline benchmark; this automation maps one pipeline stage to one host, so use a MoLink-specific hostfile with `slots=1` when your vLLM/FlexGen hostfile uses multi-GPU nodes.
+
+The wrapper writes `summary.tsv` and per-framework stdout logs under `logs/multi_node/<run-id>` unless `/logs` is writable.

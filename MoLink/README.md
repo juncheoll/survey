@@ -23,7 +23,7 @@ python -m molinkv1.entrypoints.api_server \
 ```
 
 ### benchmark Llama 70B with hostfile
-MoLink uses pipeline parallelism across single-GPU nodes. The wrapper reads a hostfile, splits the 80 Llama-2-70B layers across nodes, starts one MoLink server per node, and runs `vllm bench serve` against the first node's OpenAI-compatible API.
+MoLink uses multi-node pipeline parallelism. This wrapper maps one pipeline stage to one host, so the current hostfile format expects one GPU slot per host. It reads a hostfile, splits the 80 Llama-2-70B layers across nodes, starts one MoLink server per node, and runs `vllm bench serve` against the first node's OpenAI-compatible API.
 
 Hostfile format:
 
