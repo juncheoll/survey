@@ -56,9 +56,23 @@ TheBloke/upstage-llama-30b-instruct-2048-GGUF
 
 #### model download
 ```
-hf download TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_0.gguf
+hf download TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
+hf download Tobius/llama-2-7b-hf-gguf llama-2-7b-hf.gguf
+hf download TheBloke/LLaMA-30b-GGUF llama-30b.Q4_K_S.gguf
+bartowski/Meta-Llama-3-70B-Instruct-GGUF Meta-Llama-3-70B-Instruct-Q4_K_M.gguf
+
+hf download KoboldAI/LLaMA2-13B-Psyfighter2-GGUF LLaMA2-13B-Psyfighter2.F16.gguf
+
+
+
+
+hf download meta-llama/Llama-2-70b-hf
 ```
 
+### convert hf to gguf
+```
+python3 convert_hf_to_gguf.py models/Llama-2-7b-hf --outtype f16
+```
 
 ### run PRIMA.cpp
 ```
@@ -71,23 +85,24 @@ hf download TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_0.gguf
 ```
 # rank 0
 CUDA_VISIBLE_DEVICES=0 ./llama-server \
-  -m ~/.cache/huggingface/hub/models--TheBloke--Llama-2-7B-GGUF/snapshots/b4e04e128f421c93a5f1e34ac4d7ca9b0af47b80/llama-2-7b.Q4_0.gguf -c 4096 \
+  -m ~/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/01c7f73d771dfac7d292323805ebc428287df4f9/Llama-2-7B-hf-F16.gguf \
+  -c 2048 \
   --world 2 --rank 0 --master 192.168.79.22 --next 192.168.79.4 --prefetch \
-  -lw "16,16" -ngl 16 \
   --host 127.0.0.1 --port 8080 \
-  -np 4 --cont-batching
+  -np 64 --cont-batching \
+  -lw "40,20" -ngl 40
 
 # rank 1
 CUDA_VISIBLE_DEVICES=0 ./llama-cli \
-  -m ~/.cache/huggingface/hub/models--TheBloke--Llama-2-7B-GGUF/snapshots/b4e04e128f421c93a5f1e34ac4d7ca9b0af47b80/llama-2-7b.Q4_0.gguf \
+  -m ~/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/01c7f73d771dfac7d292323805ebc428287df4f9/Llama-2-7B-hf-F16.gguf \
   --world 2 --rank 1 --master 192.168.79.22 --next 192.168.79.22 --prefetch \
-  -ngl 16
+  -ngl 20
 
 
 python3 bench_prima_server.py \
   --url http://127.0.0.1:8080 \
   --requests 64 \
-  --concurrency 4 \
+  --concurrency 64 \
   --input-tokens 1024 \
   --output-tokens 256
 
