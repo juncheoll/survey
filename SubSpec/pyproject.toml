@@ -1,0 +1,20 @@
+[project]
+name = "subspec-env"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "datasets==3.6.0",
+    "gemlite==0.5.1.post1",
+    "hqq==0.2.6",
+    "nvtx==0.2.11",
+    "prettytable==3.16.0",
+    "pytest>=9.0.3",
+    "pyyaml>=6.0.3",
+    "sentencepiece==0.2.0",
+    "smolagents[toolkit]==1.22.0",
+    "transformers==4.52.3",
+    "typer==0.15.4",
+    "typing-extensions>=4.10.0",
+]

@@ -1,0 +1,273 @@
+from torch.nn.attention import SDPBackend, sdpa_kernel
+from tqdm import tqdm, trange
+import os
+import json
+import numpy as np
+import torch
+import gc
+import logging
+from specdecodes.models.utils.wandb_logger import wandb_logger
+from run.pipelines.utils.eval_utils import reset_kv, maybe_init_cuda_graph_runner
+
+def run_common_eval(generator, tokenizer, past_key_values, draft_past_key_values, args, dataset, log_dir):
+    # Warm up the model
+    is_profiling = generator.profiling
+    generator.profiling = False
+    for i in trange(args.warmup_iter, desc='Warming up'):
+        input_message = "Write an essay about large language models."
+        messages = [{"role": "user", "content": input_message}]
+        tokenizer.use_default_system_prompt = True
+        input_ids = tokenizer.apply_chat_template(
+            messages, 
+            tokenize=True, 
+            add_generation_prompt=True, 
+            return_tensors="pt",
+            enable_thinking=True # for Qwen 3 models
+        ).cuda(device=args.device)
+        torch.cuda.empty_cache()
+        with sdpa_kernel(backends=[SDPBackend.MATH]):
+            gc.collect()
+            torch.cuda.empty_cache()
+            generator.generate(input_ids, temperature=args.temperature, max_length=args.max_length, do_sample=args.do_sample, past_key_values=past_key_values, draft_past_key_values=draft_past_key_values)
+
+        reset_kv(past_key_values, draft_past_key_values)
+    generator.profiling = is_profiling
+
+    # CUDA-graph capture for FlashInfer, after warmup (stabilizes kernels/allocations).
+    maybe_init_cuda_graph_runner(generator, past_key_values, draft_past_key_values, args.device, args.warmup_iter)
+    
+    # Evaluate dataset
+    log_file = os.path.join(log_dir, "0.jsonl")
+    tput_list, tacc_list = [], []
+    total_iter = 0
+    total_draft_time = 0.0
+    total_target_time = 0.0
+    post_verify_count_list, speculate_count_list = [], []
+    for idx, query in tqdm(enumerate(dataset), total=len(dataset), desc="Evaluating", leave=True):
+        messages = [{"role": "user", "content": query}]
+        tokenizer.use_default_system_prompt = True
+        input_ids = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt").to(generator.device)
+        
+        if input_ids.shape[1] > args.max_length:
+            logging.info(f"Skipping query No.{idx} due to length {input_ids.shape[1]} > {args.max_length}")
+            continue
+        
+        with sdpa_kernel(backends=[SDPBackend.MATH]):
+            output_ids = generator.generate(
+                input_ids,
+                temperature=args.temperature,
+                max_length=args.max_length,
+                do_sample=args.do_sample,
+                past_key_values=past_key_values,
+                draft_past_key_values=draft_past_key_values,
+            )
+
+        reset_kv(past_key_values, draft_past_key_values)
+
+        output_message = tokenizer.decode(output_ids[0][input_ids.shape[1]:])
+        exp_log = {**wandb_logger.log_data, "query": query, "response": output_message, "peak_memory": torch.cuda.max_memory_reserved(args.device)/(1024**3)}
+        with open(log_file, 'a+') as f:
+            json.dump(exp_log, f, indent=4)
+            f.write("\n")
+
+        n_iter = exp_log["n_iter"]
+        total_iter += n_iter
+        total_draft_time += exp_log["avg_draft_time"] * n_iter
+        total_target_time += exp_log["avg_target_time"] * n_iter
+
+        tput_list.append(exp_log["tput"])
+        tacc_list.append(exp_log["avg_sampled"])
+        if exp_log.get("speculate_count", None) is not None:
+            speculate_count_list.append(exp_log.get("speculate_count", 0))
+        if exp_log.get("post_verify_count", None) is not None:
+            post_verify_count_list.append(exp_log.get("post_verify_count", 0))
+
+        del input_ids, output_ids
+        gc.collect()
+        torch.cuda.empty_cache()
+    
+    print(f"Final Results:")
+    tput_mean, tput_std = np.mean(tput_list), np.std(tput_list)
+    tacc_mean, tacc_std = np.mean(tacc_list), np.std(tacc_list) if tacc_list else 0
+    avg_draft_time = (total_draft_time / total_iter) if total_iter > 0 else 0
+    avg_target_time = (total_target_time / total_iter) if total_iter > 0 else 0
+    peak_memory = torch.cuda.max_memory_reserved(args.device)/(1024**3)
+    post_verify_rate = np.sum(post_verify_count_list) / (np.sum(post_verify_count_list) + np.sum(speculate_count_list)) if (np.sum(post_verify_count_list) + np.sum(speculate_count_list)) > 0 else 0
+    
+    print(f"\tThroughput: {tput_mean:.3f} ± {tput_std:.3f} tokens/sec")
+    print(f"\tAcceptance Length: {tacc_mean:.3f} ± {tacc_std:.3f} tokens/iter")
+    print(f"\tAverage Draft Time: {avg_draft_time:.3f} sec")
+    print(f"\tAverage Target Time: {avg_target_time:.3f} sec")
+    print(f"\tPeak Memory: {peak_memory:.3f} GiB")
+    if exp_log.get('post_verify_count', None) is not None:
+        print(f"\tPost-Verify Rate: {post_verify_rate:.3f}")
+    
+    return {
+        "tput_mean": float(tput_mean),
+        "tput_std": float(tput_std),
+        "tacc_mean": float(tacc_mean),
+        "tacc_std": float(tacc_std),
+        "avg_draft_time": float(avg_draft_time),
+        "avg_target_time": float(avg_target_time),
+        "peak_memory_gib": float(peak_memory),
+        "post_verify_rate": float(post_verify_rate) if exp_log.get('post_verify_count', None) is not None else 0,
+    }
+
+
+def run_mtbench_eval(generator, tokenizer, past_key_values, draft_past_key_values, args, dataset, log_dir):
+    # Warm up the model
+    is_profiling = generator.profiling
+    generator.profiling = False
+    for i in trange(args.warmup_iter, desc='Warming up'):
+        input_message = "Write an essay about large language models."
+        messages = [{"role": "user", "content": input_message}]
+        tokenizer.use_default_system_prompt = True
+        input_ids = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt").cuda(device=args.device)
+        
+        with sdpa_kernel(backends=[SDPBackend.MATH]):
+            gc.collect()
+            torch.cuda.empty_cache()
+            generator.generate(input_ids, temperature=args.temperature, max_length=args.max_length, do_sample=args.do_sample, past_key_values=past_key_values, draft_past_key_values=draft_past_key_values)
+
+        reset_kv(past_key_values, draft_past_key_values)
+    generator.profiling = is_profiling
+
+    # CUDA-graph capture for FlashInfer, after warmup (stabilizes kernels/allocations).
+    maybe_init_cuda_graph_runner(generator, past_key_values, draft_past_key_values, args.device, args.warmup_iter)
+
+    # Evaluate dataset
+    log_file = os.path.join(log_dir, "0.jsonl")
+    tput_list, tacc_list = [], []
+    total_iter = 0
+    total_draft_time = 0.0
+    total_target_time = 0.0
+    post_verify_count_list, speculate_count_list = [], []
+    for idx, turns in tqdm(enumerate(dataset), total=len(dataset), desc="Evaluating", leave=True):
+        # org_len = 0
+        exp_log = {}
+        tmp_exp_log = {
+            'total_sampled': 0,
+            'total_draft_time': 0,
+            'total_target_time': 0,
+            'total_verify_time': 0,
+            'n_iter': 0,
+            'n_tokens': 0,
+            'elapsed_time': 0,
+            # Optional counters (only present for some generators, e.g. SubSpec SD v2).
+            'post_verify_count': None,
+            'speculate_count': None,
+        }
+        messages = []
+        for tid, query in enumerate(turns):
+            messages.append({"role": "user", "content": query})
+            tokenizer.use_default_system_prompt = True
+            input_ids = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt").cuda(device=args.device)
+                    
+            if input_ids.shape[1] > args.max_length:
+                logging.info(f"Skipping query No.{idx} (turn {tid}) due to length {input_ids.shape[1]} > {args.max_length}")
+                continue
+            
+            with sdpa_kernel(backends=[SDPBackend.MATH]):
+                output_ids = generator.generate(input_ids, temperature=args.temperature, max_length=args.max_length, do_sample=args.do_sample, past_key_values=past_key_values, draft_past_key_values=draft_past_key_values)
+            
+            output_message = tokenizer.decode(output_ids[0][input_ids.shape[1]:])
+
+            n_iter = wandb_logger.log_data.get('n_iter', 0)
+            n_tokens = wandb_logger.log_data.get('n_tokens', 0)
+            elapsed_time = wandb_logger.log_data.get('elapsed_time', 0)
+            
+            tmp_exp_log['n_iter'] += n_iter
+            tmp_exp_log['n_tokens'] += n_tokens
+            tmp_exp_log['elapsed_time'] += elapsed_time
+            
+            tmp_exp_log['total_sampled'] += np.round(wandb_logger.log_data.get('avg_sampled', 0) * n_iter, decimals=0)
+            tmp_exp_log['total_draft_time'] += wandb_logger.log_data.get('avg_draft_time', 0) * n_iter
+            tmp_exp_log['total_target_time'] += wandb_logger.log_data.get('avg_target_time', 0) * n_iter
+            tmp_exp_log['total_verify_time'] += wandb_logger.log_data.get('avg_verify_time', 0) * n_iter
+
+            # Accumulate optional speculative decoding counters only if the generator reported them.
+            if 'post_verify_count' in wandb_logger.log_data and 'speculate_count' in wandb_logger.log_data:
+                if tmp_exp_log['post_verify_count'] is None:
+                    tmp_exp_log['post_verify_count'] = 0
+                if tmp_exp_log['speculate_count'] is None:
+                    tmp_exp_log['speculate_count'] = 0
+                tmp_exp_log['post_verify_count'] += wandb_logger.log_data.get('post_verify_count', 0)
+                tmp_exp_log['speculate_count'] += wandb_logger.log_data.get('speculate_count', 0)
+
+            exp_log = {**exp_log, tid: {**wandb_logger.log_data, "query": query, "response": output_message, "peak_memory": torch.cuda.max_memory_reserved(args.device)/(1024**3)}}
+            messages.append({"role": "system", "content": output_message})
+            
+            del input_ids, output_ids
+            gc.collect()
+            torch.cuda.empty_cache()
+        
+        reset_kv(past_key_values, draft_past_key_values)
+        
+        overall_log = {
+            "avg_draft_time": tmp_exp_log['total_draft_time'] / tmp_exp_log['n_iter'] if tmp_exp_log['n_iter'] > 0 else 0,
+            "avg_target_time": tmp_exp_log['total_target_time'] / tmp_exp_log['n_iter'] if tmp_exp_log['n_iter'] > 0 else 0,
+            "avg_verify_time": tmp_exp_log['total_verify_time'] / tmp_exp_log['n_iter'] if tmp_exp_log['n_iter'] > 0 else 0,
+            "n_iter": tmp_exp_log['n_iter'], 
+            "n_tokens": tmp_exp_log['n_tokens'], 
+            "avg_sampled": tmp_exp_log['total_sampled'] / tmp_exp_log['n_iter'] if tmp_exp_log['n_iter'] > 0 else 0,
+            "elapsed_time": tmp_exp_log['elapsed_time'],
+            "tput": tmp_exp_log['n_tokens'] / tmp_exp_log['elapsed_time'] if tmp_exp_log['elapsed_time'] > 0 else 0,
+        }
+
+        if tmp_exp_log['post_verify_count'] is not None and tmp_exp_log['speculate_count'] is not None:
+            overall_log.update({
+                "post_verify_count": tmp_exp_log['post_verify_count'],
+                "speculate_count": tmp_exp_log['speculate_count'],
+                "post_verify_rate": tmp_exp_log['post_verify_count'] / (tmp_exp_log['post_verify_count'] + tmp_exp_log['speculate_count'])
+                if (tmp_exp_log['post_verify_count'] + tmp_exp_log['speculate_count']) > 0 else 0,
+            })
+        
+        exp_log = {
+            **exp_log,
+            "overall": overall_log
+        }
+        
+        with open(log_file, 'a+') as f:
+            json.dump(exp_log, f, indent=4)
+            f.write("\n")
+
+        tput_list.append(overall_log["tput"])
+        tacc_list.append(overall_log["avg_sampled"])
+        n_iter = overall_log["n_iter"]
+        total_iter += n_iter
+        total_draft_time += overall_log["avg_draft_time"] * n_iter
+        total_target_time += overall_log["avg_target_time"] * n_iter
+        
+        # log post-verify/speculate count (only when supported)
+        if overall_log.get("post_verify_count", None) is not None:
+            logging.info(
+                f"Post-verify count: {overall_log.get('post_verify_count', 0)}, Speculate count: {overall_log.get('speculate_count', 0)}"
+            )
+            post_verify_count_list.append(overall_log.get('post_verify_count', 0))
+            speculate_count_list.append(overall_log.get('speculate_count', 0))
+            
+    print(f"Final Results:")
+    tput_mean, tput_std = np.mean(tput_list), np.std(tput_list)
+    tacc_mean, tacc_std = np.mean(tacc_list), np.std(tacc_list) if tacc_list else 0
+    avg_draft_time = (total_draft_time / total_iter) if total_iter > 0 else 0
+    avg_target_time = (total_target_time / total_iter) if total_iter > 0 else 0
+    peak_memory = torch.cuda.max_memory_reserved(args.device)/(1024**3)
+    post_verify_rate = np.sum(post_verify_count_list) / (np.sum(post_verify_count_list) + np.sum(speculate_count_list)) if (np.sum(post_verify_count_list) + np.sum(speculate_count_list)) > 0 else 0
+    
+    print(f"\tThroughput: {tput_mean:.3f} ± {tput_std:.3f} tokens/sec")
+    print(f"\tAcceptance Length: {tacc_mean:.3f} ± {tacc_std:.3f} tokens/iter")
+    print(f"\tAverage Draft Time: {avg_draft_time:.3f} sec")
+    print(f"\tAverage Target Time: {avg_target_time:.3f} sec")
+    print(f"\tPeak Memory: {peak_memory:.3f} GiB")
+    if hasattr(generator, 'post_verify_count') and generator.post_verify_count is not None:
+        print(f"\tPost-Verify Rate: {post_verify_rate:.3f}")
+    return {
+        "tput_mean": float(tput_mean),
+        "tput_std": float(tput_std),
+        "tacc_mean": float(tacc_mean),
+        "tacc_std": float(tacc_std),
+        "avg_draft_time": float(avg_draft_time),
+        "avg_target_time": float(avg_target_time),
+        "peak_memory_gib": float(peak_memory),
+        "post_verify_rate": float(post_verify_rate) if hasattr(generator, 'post_verify_count') and generator.post_verify_count is not None else 0,
+    }

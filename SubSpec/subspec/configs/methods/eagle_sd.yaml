@@ -1,0 +1,30 @@
+# Eagle SD example
+method: eagle_sd
+
+llm_path: meta-llama/Llama-3.1-8B-Instruct
+# Update this path to your local EAGLE checkpoint
+# (this matches the old preset default)
+draft_model_path: ~/checkpoints/eagle/official/EAGLE-Llama-3.1-8B-Instruct
+
+recipe: null
+
+max_length: 4096
+cache_implementation: static
+warmup_iter: 1
+compile_mode: max-autotune
+
+# Target sampling settings (defaults)
+do_sample: false
+temperature: 0
+
+generator_profiling: true
+
+generator_kwargs:
+  prefill_chunk_size: 4096
+  verify_method: exact
+  verify_kwargs: {}
+
+draft_params:
+  temperature: 1.0
+  max_depth: 6
+  topk_len: 10
