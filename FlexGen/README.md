@@ -36,8 +36,21 @@ python3 -m flexllmgen.flex_opt --model facebook/opt-6.7b --percent 0 100 100 0 1
 #### Llama Model (NEW!)
 ```
 python3 -m flexllmgen.flex_opt --model meta-llama/Llama-2-13b-hf --percent 0 100 100 0 100 0 --path _DUMMY_
-python3 -m flexllmgen.flex_opt --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 --percent 0 100 100 0 100 0
 ```
+
+#### Benchmark Llama Models
+```
+./run_flexgen_benchmark.sh
+```
+
+The script runs `uv sync`, activates `.venv`, and benchmarks:
+- `meta-llama/Llama-2-7b-hf`
+- `meta-llama/Llama-2-13b-hf`
+- `huggyllama/llama-30b`
+
+Each model is tested with GPU batch sizes `1`, `2`, `4`, and `8`, using `--prompt-len 1024` and `--gen-len 512`.
+
+Logs are written to `/logs/flexgen/<run-id>` inside the Docker container, or `./logs/flexgen/<run-id>` outside the container.
 
 
 #### Multi-GPU(Multi-Node)
