@@ -1,45 +1,0 @@
-/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
-  torch.utils._pytree._register_pytree_node(
-/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
-  torch.utils._pytree._register_pytree_node(
-/opt/venvs/zero/lib/python3.11/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
-  warnings.warn(
-load model
-Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:25<00:25, 25.20s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:33<00:00, 15.45s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:33<00:00, 16.91s/it]
-model.config = OPTConfig {
-  "_name_or_path": "facebook/opt-6.7b",
-  "_remove_final_layer_norm": false,
-  "activation_dropout": 0.0,
-  "activation_function": "relu",
-  "architectures": [
-    "OPTForCausalLM"
-  ],
-  "attention_dropout": 0.0,
-  "bos_token_id": 2,
-  "do_layer_norm_before": true,
-  "dropout": 0.1,
-  "enable_bias": true,
-  "eos_token_id": 2,
-  "ffn_dim": 16384,
-  "hidden_size": 4096,
-  "init_std": 0.02,
-  "layer_norm_elementwise_affine": true,
-  "layerdrop": 0.0,
-  "max_position_embeddings": 2048,
-  "model_type": "opt",
-  "num_attention_heads": 32,
-  "num_hidden_layers": 32,
-  "pad_token_id": 1,
-  "prefix": "</s>",
-  "torch_dtype": "float16",
-  "transformers_version": "4.33.0.dev0",
-  "use_cache": true,
-  "vocab_size": 50272,
-  "word_embed_proj_dim": 4096
-}
-
-benchmark, prompt_len = 512, execute_gen_len = 32, input_ids.shape = torch.Size([4, 512])
-token_latency=[1.3875353336334229, 0.919135570526123, 0.7227327823638916, 0.7225418090820312, 0.7223014831542969, 0.7237191200256348, 0.7219386100769043, 0.7220902442932129, 0.7230496406555176, 0.7225890159606934, 0.7238502502441406, 0.7230415344238281, 0.7243893146514893, 0.7242364883422852, 0.7243216037750244, 0.724506139755249, 0.7253870964050293, 0.7247829437255859, 0.7252693176269531, 0.7262206077575684, 0.7249600887298584, 0.7253732681274414, 0.7264244556427002, 0.7255754470825195, 0.7241308689117432, 0.7248873710632324, 0.7249960899353027, 0.7243883609771729, 0.724510908126831, 0.7246572971343994, 0.7252881526947021, 0.7245104312896729]
-token_latency=[1.1597845554351807, 0.7218937873840332, 0.7220923900604248, 0.7215054035186768, 0.7211337089538574, 0.722278356552124, 0.7222626209259033, 0.7216782569885254, 0.7215843200683594, 0.7221665382385254, 0.7219383716583252, 0.7218465805053711, 0.7222239971160889, 0.7232353687286377, 0.7233273983001709, 0.7229533195495605, 0.7241175174713135, 0.7241203784942627, 0.7242434024810791, 0.7248690128326416, 0.7251944541931152, 0.7255268096923828, 0.7251219749450684, 0.7259624004364014, 0.7240686416625977, 0.7241010665893555, 0.7248241901397705, 0.7249674797058105, 0.7259166240692139, 0.7248177528381348, 0.72538161277771, 0.7242753505706787]
-token_latency=[1.1655197143554688, 0.723846435546875, 0.7214090824127197, 0.7216298580169678, 0.7222607135772705, 0.7222497463226318, 0.7224884033203125, 0.7230803966522217, 0.722994327545166, 0.7229709625244141, 0.7226202487945557, 0.7229273319244385, 0.7231225967407227, 0.7232599258422852, 0.7235007286071777, 0.7236731052398682, 0.7235991954803467, 0.7235391139984131, 0.7238450050354004, 0.7249171733856201, 0.7248387336730957, 0.724811315536499, 0.7243688106536865, 0.7257809638977051, 0.723771333694458, 0.7239069938659668, 0.7244319915771484, 0.724207878112793, 0.7243835926055908, 0.7256600856781006, 0.7251467704772949, 0.7255549430847168]
-[rank0]:[W423 14:42:06.761847386 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

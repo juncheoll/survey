@@ -1,46 +1,0 @@
-/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
-  torch.utils._pytree._register_pytree_node(
-/opt/venvs/zero/lib/python3.11/site-packages/transformers/utils/generic.py:260: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
-  torch.utils._pytree._register_pytree_node(
-/opt/venvs/zero/lib/python3.11/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
-  warnings.warn(
-load model
-Loading checkpoint shards:   0%|          | 0/3 [00:00<?, ?it/s]Loading checkpoint shards:  33%|███▎      | 1/3 [00:25<00:50, 25.18s/it]Loading checkpoint shards:  67%|██████▋   | 2/3 [00:50<00:25, 25.35s/it]Loading checkpoint shards: 100%|██████████| 3/3 [01:05<00:00, 20.73s/it]Loading checkpoint shards: 100%|██████████| 3/3 [01:05<00:00, 21.96s/it]
-model.config = OPTConfig {
-  "_name_or_path": "facebook/opt-13b",
-  "_remove_final_layer_norm": false,
-  "activation_dropout": 0.0,
-  "activation_function": "relu",
-  "architectures": [
-    "OPTForCausalLM"
-  ],
-  "attention_dropout": 0.0,
-  "bos_token_id": 2,
-  "do_layer_norm_before": true,
-  "dropout": 0.1,
-  "enable_bias": true,
-  "eos_token_id": 2,
-  "ffn_dim": 20480,
-  "hidden_size": 5120,
-  "init_std": 0.02,
-  "layer_norm_elementwise_affine": true,
-  "layerdrop": 0.0,
-  "max_position_embeddings": 2048,
-  "model_type": "opt",
-  "num_attention_heads": 40,
-  "num_hidden_layers": 40,
-  "output_projection": true,
-  "pad_token_id": 1,
-  "prefix": "</s>",
-  "torch_dtype": "float16",
-  "transformers_version": "4.33.0.dev0",
-  "use_cache": true,
-  "vocab_size": 50272,
-  "word_embed_proj_dim": 5120
-}
-
-benchmark, prompt_len = 512, execute_gen_len = 32, input_ids.shape = torch.Size([4, 512])
-token_latency=[2.2463300228118896, 1.4698023796081543, 1.283625602722168, 1.2836060523986816, 1.2868947982788086, 1.2846801280975342, 1.2846734523773193, 1.2848329544067383, 1.2875218391418457, 1.2856941223144531, 1.2862975597381592, 1.2848682403564453, 1.2886219024658203, 1.2858538627624512, 1.286982774734497, 1.2867329120635986, 1.2880675792694092, 1.2860963344573975, 1.2875604629516602, 1.2858259677886963, 1.2885656356811523, 1.2874181270599365, 1.2889289855957031, 1.2865276336669922, 1.286013126373291, 1.2862472534179688, 1.2881686687469482, 1.2866466045379639, 1.287858009338379, 1.2874586582183838, 1.2879204750061035, 1.289963960647583]
-token_latency=[1.9973974227905273, 1.2826483249664307, 1.2814726829528809, 1.286489486694336, 1.2822575569152832, 1.2834138870239258, 1.282604455947876, 1.2839171886444092, 1.2842655181884766, 1.2841298580169678, 1.2849032878875732, 1.285187005996704, 1.285747766494751, 1.2845962047576904, 1.2873814105987549, 1.2858524322509766, 1.2879064083099365, 1.2870936393737793, 1.2874433994293213, 1.2885220050811768, 1.2888007164001465, 1.2876696586608887, 1.2909507751464844, 1.2916529178619385, 1.2873737812042236, 1.2868528366088867, 1.2903788089752197, 1.2875151634216309, 1.289724349975586, 1.2883813381195068, 1.2919318675994873, 1.2895069122314453]
-token_latency=[1.9967126846313477, 1.282013177871704, 1.282698392868042, 1.2824170589447021, 1.2828423976898193, 1.2837307453155518, 1.284162998199463, 1.2834444046020508, 1.2843868732452393, 1.2842175960540771, 1.2843286991119385, 1.28513503074646, 1.2860069274902344, 1.2853953838348389, 1.285663366317749, 1.285524845123291, 1.2862231731414795, 1.287421464920044, 1.2864634990692139, 1.2870275974273682, 1.2872812747955322, 1.2877182960510254, 1.2875337600708008, 1.289494514465332, 1.2865662574768066, 1.2866852283477783, 1.2882487773895264, 1.28830885887146, 1.2884750366210938, 1.2888710498809814, 1.2882587909698486, 1.2879972457885742]
-[rank0]:[W423 17:25:54.480257577 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
