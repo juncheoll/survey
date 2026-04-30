@@ -8,3 +8,8 @@
 # For four GPUs per node:
 # 192.168.79.22 slots=4
 # 192.168.79.23 slots=4
+#
+# If nodes use different SSH ports, use ~/.ssh/config aliases instead of
+# raw IP addresses:
+# flex-node-1 slots=1
+# flex-node-2 slots=1

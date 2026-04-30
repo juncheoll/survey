@@ -1,0 +1,14 @@
+# Ray/vLLM hostfile example.
+# The first non-comment host is treated as the Ray head node.
+#
+# One GPU per node:
+# 192.168.79.22 slots=1
+# 192.168.79.23 slots=1
+#
+# Four GPUs per node:
+# 192.168.79.22 slots=4
+# 192.168.79.23 slots=4
+#
+# If nodes use different SSH ports, use ~/.ssh/config aliases:
+# vllm-node-1 slots=4
+# vllm-node-2 slots=4

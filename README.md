@@ -21,3 +21,9 @@ meta-llama/Llama-2-13b-hf
 huggyllama/llama-30b
 meta-llama/Llama-2-70b-hf
 ```
+
+###
+```
+sudo apt update
+sudo apt install -y openmpi-bin libopenmpi-dev
+```

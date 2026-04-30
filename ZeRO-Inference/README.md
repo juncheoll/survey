@@ -38,7 +38,7 @@ except Exception:
 ```
 deepspeed --num_gpus 1 run_model.py --dummy --model facebook/opt-13b --batch-size 8 --prompt-len 512 --gen-len 32 --cpu-offload --kv-offload
 
-deepspeed --num_gpus 1 run_model.py --dummy --model facebook/opt-66b --batch-size 8 --prompt-len 512 --gen-len 32 --cpu-offload --kv-offload --quant_bits
+deepspeed --num_gpus 1 run_model.py --dummy --model facebook/opt-66b --batch-size 8 --prompt-len 512 --gen-len 32 --cpu-offload --kv-offload --quant-bits 4
 ```
 
 ### benchmark Llama models
@@ -51,6 +51,12 @@ The script runs `uv sync`, activates `.venv`, and benchmarks:
 - `meta-llama/Llama-2-13b-hf`
 - `huggyllama/llama-30b`
 
-Each model is tested with batch sizes `1`, `2`, `4`, and `8`, using `--prompt-len 1024` and `--gen-len 512`.
+Each model is tested with the configured batch sizes using `--prompt-len 1024` and `--gen-len 512`.
+For each batch size, the script runs both the default mode and the 4-bit quantized mode with `--quant-bits 4`.
+
+Useful overrides:
+- `GPU_BATCH_SIZES="1 2 4 8"`: select batch sizes.
+- `QUANT_MODES=off`: run only the default mode.
+- `QUANT_MODES=int4`: run only the 4-bit quantized mode.
 
 Logs are written to `/logs/zero_inference/<run-id>` inside the Docker container, or `./logs/zero_inference/<run-id>` outside the container.

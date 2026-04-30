@@ -8,6 +8,8 @@ REMOTE_FLEXGEN_DIR="${REMOTE_FLEXGEN_DIR:-$SCRIPT_DIR}"
 UV_BIN="${UV_BIN:-uv}"
 HEAD_IP="${HEAD_IP:-$(hostname -i | awk '{print $1}')}"
 MPI_EXTRA_ARGS="${MPI_EXTRA_ARGS:-}"
+MPI_PREFIX="${MPI_PREFIX:-}"
+SSH_PORT="${SSH_PORT:-}"
 
 MPI_HOST_ARGS=()
 HOSTS_LABEL=""
@@ -26,6 +28,12 @@ fi
 
 # shellcheck disable=SC2206
 MPI_EXTRA=($MPI_EXTRA_ARGS)
+if [[ -n "$MPI_PREFIX" ]]; then
+  MPI_EXTRA+=(--prefix "$MPI_PREFIX")
+fi
+if [[ -n "$SSH_PORT" ]]; then
+  MPI_EXTRA+=(--mca plm_rsh_args "-p $SSH_PORT")
+fi
 
 REMOTE_DIR_QUOTED="$(printf "%q" "$REMOTE_FLEXGEN_DIR")"
 UV_BIN_QUOTED="$(printf "%q" "$UV_BIN")"
@@ -44,6 +52,7 @@ echo \"[node] flexllmgen import ok\"
 
 echo "[setup] hosts: $HOSTS_LABEL"
 echo "[setup] remote FlexGen dir: $REMOTE_FLEXGEN_DIR"
+echo "[setup] MPI prefix: ${MPI_PREFIX:-default}"
 
 mpirun \
   "${MPI_HOST_ARGS[@]}" \

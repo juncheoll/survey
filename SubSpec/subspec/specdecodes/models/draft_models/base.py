@@ -87,21 +87,44 @@ class TreeMaskCache:
                 device=self.device,
                 dtype=torch.bool
             )
+            self.current_len = self.prefix_len
         # Create an identity block for later use
         self.eye_block = torch.eye(self.sample_len, device=self.device, dtype=torch.bool).unsqueeze(0).unsqueeze(0)
 
+    def _get_eye_block(self, sample_len: int) -> torch.Tensor:
+        if sample_len == self.sample_len:
+            return self.eye_block
+        if sample_len < self.sample_len:
+            return self.eye_block[..., :sample_len, :sample_len]
+        return torch.eye(sample_len, device=self.device, dtype=torch.bool).unsqueeze(0).unsqueeze(0)
+
     def update_tree_mask(self, parent_indices: torch.Tensor,return_invert:bool=True) -> torch.Tensor:
+        parent_indices = parent_indices[0] if parent_indices.dim() > 1 else parent_indices
+        sample_len = int(parent_indices.numel())
+        eye_block = self._get_eye_block(sample_len)
+
         if self.tree_mask_update_method == 'static': # static tree mask update
-            # Update existing mask based on parent indices
-            self.tree_mask_cache[..., :self.current_len] = self.tree_mask_cache[..., parent_indices[0], :self.current_len]
-            # Append the eye_block to the mask
-            self.tree_mask_cache[..., self.current_len:self.current_len + self.sample_len] = self.eye_block
-            # Update the current length
-            self.current_len += self.sample_len
+            parent_mask = self.tree_mask_cache[:, :, parent_indices, :self.current_len]
+            next_len = self.current_len + sample_len
+
+            if next_len > self.max_cache_len or sample_len != self.sample_len:
+                # The static buffer is too narrow for this tree depth. Continue
+                # dynamically instead of failing on a partial-width assignment.
+                self.tree_mask_update_method = 'dynamic'
+                self.tree_mask_cache = torch.concat((parent_mask, eye_block), dim=3)
+                self.current_len = next_len
+            else:
+                # Update existing mask based on parent indices
+                self.tree_mask_cache[..., :self.current_len] = parent_mask
+                # Append the eye_block to the mask
+                self.tree_mask_cache[..., self.current_len:next_len] = eye_block
+                # Update the current length
+                self.current_len = next_len
         else: 
             # Dynamically expand the mask by concatenating the eye_block
-            tree_mask = self.tree_mask_cache[:, :, parent_indices[0]]
-            self.tree_mask_cache = torch.concat((tree_mask, self.eye_block), dim=3)
+            tree_mask = self.tree_mask_cache[:, :, parent_indices]
+            self.tree_mask_cache = torch.concat((tree_mask, eye_block), dim=3)
+            self.current_len += sample_len
         
         # Invert the mask and return
         if return_invert:

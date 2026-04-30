@@ -30,3 +30,60 @@ vllm bench serve \
 export GLOO_SOCKET_IFNAME=enp7s0
 export NCCL_SOCKET_IFNAME=enp7s0
 ```
+
+### benchmark Llama 70B with Ray
+The benchmark wrapper reads host information, starts a Ray cluster, launches `vllm serve`, waits for the OpenAI-compatible API, and runs `vllm bench serve`.
+
+With a hostfile:
+
+```
+cp hosts.example hosts
+HOSTFILE=hosts ./run_vllm_benchmark.sh
+```
+
+Or with a comma-separated host list:
+
+```
+HOSTS="192.168.79.22,192.168.79.23" GPUS_PER_NODE=4 ./run_vllm_benchmark.sh
+```
+
+Hostfile format:
+
+```
+192.168.79.22 slots=4
+192.168.79.23 slots=4
+```
+
+The first host is treated as the Ray head node. Run the script on that head node. By default, `HEAD_ADDRESS` is detected with `hostname -i`; override it if workers need a different reachable IP:
+
+```
+HEAD_ADDRESS=192.168.79.22 HOSTFILE=hosts ./run_vllm_benchmark.sh
+```
+
+Defaults:
+- `MODEL=meta-llama/Llama-2-70b-hf`
+- `TENSOR_PARALLEL_SIZE=auto`: uses the first host's slots.
+- `PIPELINE_PARALLEL_SIZE=auto`: uses the number of hosts.
+- `RANDOM_INPUT_LEN=1024`
+- `RANDOM_OUTPUT_LEN=512`
+- `NUM_PROMPTS=64`
+- `MAX_CONCURRENCY=64`
+
+Useful overrides:
+- `RUN_RAY_SETUP=0`: reuse an existing Ray cluster.
+- `RAY_STOP_FIRST=0`: do not stop existing Ray processes during setup.
+- `SSH_PORT=2222`: use the same non-default SSH port for every worker.
+- `VLLM_EXTRA_SERVE_ARGS="..."`: append extra args to `vllm serve`.
+- `VLLM_EXTRA_BENCH_ARGS="..."`: append extra args to `vllm bench serve`.
+- `LOG_DIR=/path/to/logs`: change benchmark log location.
+
+Logs are written to `/logs/vllm/<run-id>` if `/logs` is writable, otherwise `./logs/vllm/<run-id>`.
+
+For example, this hostfile:
+
+```
+192.168.79.22 slots=4
+192.168.79.23 slots=4
+```
+
+defaults to `--tensor-parallel-size 4` and `--pipeline-parallel-size 2`.

@@ -371,7 +371,7 @@ if __name__ == "__main__":
     parser.add_argument("--kv-offload", action="store_true", help="Use kv cache cpu offloading.")
     parser.add_argument("--log-file", type=str, default="auto", help="log file name")
     parser.add_argument("--verbose", type=int, default=2, help="verbose level")
-    parser.add_argument("--quant_bits", type=int, default=16, help="model weight quantization bits; either 4 or 8")
+    parser.add_argument("--quant_bits", "--quant-bits", dest="quant_bits", type=int, default=16, help="model weight quantization bits; either 4 or 8")
     parser.add_argument("--quant_group_size", type=int, default=64, help="model weight quantization group size")
     parser.add_argument("--pin_kv_cache", action="store_true", help="Allocate kv cache in pinned memory for offloading.")
     parser.add_argument("--async_kv_offload", action="store_true", help="Using non_blocking copy for kv cache offloading.")

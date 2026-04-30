@@ -7,9 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 DEFAULT_MODELS=(
-  "meta-llama/Llama-2-7b-hf"
-  "meta-llama/Llama-2-13b-hf"
-  "huggyllama/llama-30b"
+  "meta-llama/Llama-2-70b-hf"
 )
 
 DEFAULT_COMPRESS_ONLY_MODELS=(
@@ -27,7 +25,7 @@ PORT="${PORT:-7777}"
 REMOTE_FLEXGEN_DIR="${REMOTE_FLEXGEN_DIR:-$SCRIPT_DIR}"
 PYTHON_EXEC="${PYTHON_EXEC:-$REMOTE_FLEXGEN_DIR/.venv/bin/python}"
 MODEL_PATH="${MODEL_PATH:-_DUMMY_}"
-GPU_BATCH_SIZES="${GPU_BATCH_SIZES:-1 2 4 8}"
+GPU_BATCH_SIZES="${GPU_BATCH_SIZES:-1 2 4 8 16 32 64 128 256}"
 COMPRESS_WEIGHT_MODES="${COMPRESS_WEIGHT_MODES:-off on}"
 NUM_GPU_BATCHES="${NUM_GPU_BATCHES:-1}"
 PROMPT_LEN="${PROMPT_LEN:-1024}"
@@ -37,6 +35,8 @@ GPUS_PER_NODE="${GPUS_PER_NODE:-1}"
 CORES_PER_GPU="${CORES_PER_GPU:-4}"
 RUN_SETUP="${RUN_SETUP:-1}"
 MPI_EXTRA_ARGS="${MPI_EXTRA_ARGS:-}"
+MPI_PREFIX="${MPI_PREFIX:-}"
+SSH_PORT="${SSH_PORT:-}"
 
 if [[ -z "${LOG_DIR:-}" ]]; then
   if [[ -d "/logs" && -w "/logs" ]]; then
@@ -63,6 +63,12 @@ fi
 
 # shellcheck disable=SC2206
 MPI_EXTRA=($MPI_EXTRA_ARGS)
+if [[ -n "$MPI_PREFIX" ]]; then
+  MPI_EXTRA+=(--prefix "$MPI_PREFIX")
+fi
+if [[ -n "$SSH_PORT" ]]; then
+  MPI_EXTRA+=(--mca plm_rsh_args "-p $SSH_PORT")
+fi
 
 # shellcheck disable=SC2206
 PERCENT=($PERCENT_ARGS)
@@ -115,6 +121,8 @@ fi
   echo "# percent: ${PERCENT[*]}"
   echo "# gpus_per_node: $GPUS_PER_NODE"
   echo "# cores_per_gpu: $CORES_PER_GPU"
+  echo "# mpi_prefix: ${MPI_PREFIX:-default}"
+  echo "# ssh_port: ${SSH_PORT:-default}"
   echo "# gpu_batch_sizes: ${BATCH_SIZES[*]}"
   echo "# compress_weight_modes: ${COMPRESS_MODES[*]}"
   echo "# compress_only_models: ${COMPRESS_ONLY_MODELS[*]}"
