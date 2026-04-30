@@ -1,0 +1,10 @@
+# OpenMPI hostfile example.
+# Use the same FlexGen path and prepared Docker/host environment on every node.
+#
+# For one GPU per node:
+# 192.168.79.22 slots=1
+# 192.168.79.23 slots=1
+#
+# For four GPUs per node:
+# 192.168.79.22 slots=4
+# 192.168.79.23 slots=4

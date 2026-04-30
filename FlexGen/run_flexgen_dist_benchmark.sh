@@ -22,24 +22,47 @@ if [[ "$#" -gt 0 ]]; then
 fi
 COMPRESS_ONLY_MODELS=("${DEFAULT_COMPRESS_ONLY_MODELS[@]}")
 
+HEAD_IP="${HEAD_IP:-$(hostname -i | awk '{print $1}')}"
+PORT="${PORT:-7777}"
+REMOTE_FLEXGEN_DIR="${REMOTE_FLEXGEN_DIR:-$SCRIPT_DIR}"
+PYTHON_EXEC="${PYTHON_EXEC:-$REMOTE_FLEXGEN_DIR/.venv/bin/python}"
 MODEL_PATH="${MODEL_PATH:-_DUMMY_}"
 GPU_BATCH_SIZES="${GPU_BATCH_SIZES:-1 2 4 8}"
 COMPRESS_WEIGHT_MODES="${COMPRESS_WEIGHT_MODES:-off on}"
 NUM_GPU_BATCHES="${NUM_GPU_BATCHES:-1}"
 PROMPT_LEN="${PROMPT_LEN:-1024}"
 GEN_LEN="${GEN_LEN:-512}"
-PERCENT_ARGS="${PERCENT_ARGS:-0 100 100 0 100 0}"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
+PERCENT_ARGS="${PERCENT_ARGS:-80 20 100 0 100 0}"
+GPUS_PER_NODE="${GPUS_PER_NODE:-1}"
+CORES_PER_GPU="${CORES_PER_GPU:-4}"
+RUN_SETUP="${RUN_SETUP:-1}"
+MPI_EXTRA_ARGS="${MPI_EXTRA_ARGS:-}"
 
-# If this script is run inside the documented Docker container, /logs is usually
-# mounted from the host. Otherwise, keep logs inside the FlexGen directory.
 if [[ -z "${LOG_DIR:-}" ]]; then
   if [[ -d "/logs" && -w "/logs" ]]; then
-    LOG_DIR="/logs/flexgen"
+    LOG_DIR="/logs/flexgen_dist"
   else
-    LOG_DIR="$SCRIPT_DIR/logs/flexgen"
+    LOG_DIR="$SCRIPT_DIR/logs/flexgen_dist"
   fi
 fi
+
+MPI_HOST_ARGS=()
+HOSTS_LABEL=""
+
+if [[ -n "${HOSTFILE:-}" ]]; then
+  MPI_HOST_ARGS=(--hostfile "$HOSTFILE")
+  HOSTS_LABEL="hostfile:$HOSTFILE"
+elif [[ -n "${HOSTS:-}" ]]; then
+  MPI_HOST_ARGS=(-H "$HOSTS")
+  HOSTS_LABEL="$HOSTS"
+else
+  HOSTS="$HEAD_IP"
+  MPI_HOST_ARGS=(-H "$HOSTS")
+  HOSTS_LABEL="$HOSTS"
+fi
+
+# shellcheck disable=SC2206
+MPI_EXTRA=($MPI_EXTRA_ARGS)
 
 # shellcheck disable=SC2206
 PERCENT=($PERCENT_ARGS)
@@ -74,31 +97,24 @@ RUN_LOG_DIR="$LOG_DIR/$RUN_ID"
 SUMMARY_LOG="$RUN_LOG_DIR/summary.tsv"
 mkdir -p "$RUN_LOG_DIR"
 
-echo "[setup] working directory: $SCRIPT_DIR"
-echo "[setup] log directory: $RUN_LOG_DIR"
-echo "[setup] running uv sync"
-if ! uv sync; then
-  echo "[setup] uv sync failed" >&2
-  exit 1
+if [[ "$RUN_SETUP" != "0" ]]; then
+  echo "[setup] validating remote uv environments"
+  "$SCRIPT_DIR/run_flexgen_dist_setup.sh"
 fi
-
-VENV_ACTIVATE="$SCRIPT_DIR/.venv/bin/activate"
-if [[ ! -f "$VENV_ACTIVATE" ]]; then
-  echo "[setup] virtualenv activation script not found: $VENV_ACTIVATE" >&2
-  exit 1
-fi
-
-# Activation is intentional here because FlexGen's invocation uses python -m.
-# This also matches the manual workflow in README.md.
-# shellcheck source=/dev/null
-source "$VENV_ACTIVATE"
 
 {
-  echo "# framework: FlexGen"
+  echo "# framework: FlexGen distributed"
   echo "# run_id: $RUN_ID"
   echo "# started_at: $(date -Iseconds)"
+  echo "# hosts: $HOSTS_LABEL"
+  echo "# head_ip: $HEAD_IP"
+  echo "# port: $PORT"
+  echo "# remote_flexgen_dir: $REMOTE_FLEXGEN_DIR"
+  echo "# python_exec: $PYTHON_EXEC"
   echo "# model_path: $MODEL_PATH"
   echo "# percent: ${PERCENT[*]}"
+  echo "# gpus_per_node: $GPUS_PER_NODE"
+  echo "# cores_per_gpu: $CORES_PER_GPU"
   echo "# gpu_batch_sizes: ${BATCH_SIZES[*]}"
   echo "# compress_weight_modes: ${COMPRESS_MODES[*]}"
   echo "# compress_only_models: ${COMPRESS_ONLY_MODELS[*]}"
@@ -135,8 +151,8 @@ run_one() {
   safe_model="${model//\//_}"
   safe_model="${safe_model//:/_}"
   if [[ "$compress_mode" == "on" ]]; then
-      quant_label="compress_weight"
-      compress_args=(--compress-weight)
+    quant_label="compress_weight"
+    compress_args=(--compress-weight)
   else
     quant_label="no_compress"
     compress_args=()
@@ -145,15 +161,34 @@ run_one() {
   metrics_log="$RUN_LOG_DIR/${safe_model}_gbs${gpu_batch_size}_${quant_label}.metrics.log"
 
   cmd=(
-    "$PYTHON_BIN" -m flexllmgen.flex_opt
+    mpirun
+    "${MPI_HOST_ARGS[@]}"
+    "${MPI_EXTRA[@]}"
+    --mca btl_tcp_if_exclude lo,docker0
+    --mca oob_tcp_if_exclude lo,docker0
+    --map-by "ppr:${GPUS_PER_NODE}:node:pe=${CORES_PER_GPU}"
+    --oversubscribe
+    --bind-to core
+    -x "OMP_NUM_THREADS=${CORES_PER_GPU}"
+    -x PATH
+    -x HF_HOME
+    -x HF_TOKEN
+    -x HUGGING_FACE_HUB_TOKEN
+    -x TRANSFORMERS_CACHE
+    "$PYTHON_EXEC" -m flexllmgen.dist_flex_opt
+    --head-ip "$HEAD_IP"
+    --port "$PORT"
+    --use-mpi
     --model "$model"
-    --percent "${PERCENT[@]}"
     --path "$MODEL_PATH"
     --gpu-batch-size "$gpu_batch_size"
     --num-gpu-batches "$NUM_GPU_BATCHES"
     --prompt-len "$PROMPT_LEN"
     --gen-len "$GEN_LEN"
-    --log-file "$metrics_log"
+    --percent "${PERCENT[@]}"
+    --comm-device gpu
+    --async-comm
+    --no-log
     "${compress_args[@]}"
   )
 
@@ -170,6 +205,9 @@ run_one() {
     "${cmd[@]}"
   } > "$stdout_log" 2>&1
   exit_code=$?
+
+  grep -E "model size:|peak gpu mem:|prefill latency:|decode latency:|total latency:" \
+    "$stdout_log" > "$metrics_log" || true
 
   ended_at="$(date -Iseconds)"
   ended_sec="$(date +%s)"
