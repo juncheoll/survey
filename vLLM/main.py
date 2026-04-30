@@ -1,5 +1,5 @@
 def main():
-    print("Hello from vllm env!")
+    print("Hello from vllm!")
 
 
 if __name__ == "__main__":
