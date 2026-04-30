@@ -3,8 +3,14 @@ vram_limit_gb: 12
 seed: 0
 device: cuda:0
 max_length: 2048
+max_new_tokens: 128
+test_prompt: "Do you know what is Beyblade? What is the best strategy to build the strongest Beyblade?"
 
-llm_path: Qwen/Qwen2.5-14B-Instruct
+llm_path: meta-llama/Llama-2-7b-hf
+# Optional: pin Hugging Face to an existing cache and fail fast instead of
+# downloading missing files. Override/remove these if your cache lives elsewhere.
+model_cache_dir: ~/.cache/huggingface/hub
+local_files_only: true
 
 do_sample: false
 temperature: 0
@@ -23,5 +29,5 @@ recipe:
   class_path: specdecodes.helpers.recipes.subspec.hqq_4bit_postspec:Recipe
 
 cache_implementation: static
-warmup_iter: 3
+warmup_iter: 1
 compile_mode: max-autotune

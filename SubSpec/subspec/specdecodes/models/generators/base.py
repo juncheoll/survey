@@ -164,14 +164,16 @@ class GeneratorBase(nn.Module):
         do_sample=True,
         stop_strings=None,
         stream_callback=None,
+        ignore_eos=False,
         **model_kwargs,
     ):        
         # 1. prepare stopping criteria
+        eos_token_tensor = None if ignore_eos else self.tokenizer.eos_token_id
         stopping_criteria = self._get_stopping_criteria(
             input_ids_length=input_ids.shape[1],
             max_new_tokens=max_new_tokens,
             max_length=max_length,
-            eos_token_tensor=self.tokenizer.eos_token_id,
+            eos_token_tensor=eos_token_tensor,
             stop_strings=stop_strings
         )
         

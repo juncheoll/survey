@@ -35,12 +35,54 @@ def _build_input_ids(tokenizer, messages, device):
     return tokenizer(prompt, return_tensors="pt")["input_ids"].to(device)
 
 
+def _synthetic_token_id(tokenizer, token_text):
+    token_ids = tokenizer.encode(token_text, add_special_tokens=False)
+    special_ids = set(getattr(tokenizer, "all_special_ids", []) or [])
+    for token_id in token_ids:
+        if token_id not in special_ids:
+            return int(token_id)
+    if token_ids:
+        return int(token_ids[0])
+    if getattr(tokenizer, "unk_token_id", None) is not None:
+        return int(tokenizer.unk_token_id)
+    raise ValueError(f"Could not tokenize test_input_token_text={token_text!r}")
+
+
+def _prepare_test_input(tokenizer, args, input_message):
+    n_input_tokens = getattr(args, "test_input_tokens", None)
+    if n_input_tokens is not None:
+        n_input_tokens = int(n_input_tokens)
+        if n_input_tokens <= 0:
+            raise ValueError("test_input_tokens must be a positive integer")
+        token_text = getattr(args, "test_input_token_text", " hello")
+        token_id = _synthetic_token_id(tokenizer, token_text)
+        input_ids = torch.full(
+            (1, n_input_tokens),
+            token_id,
+            dtype=torch.long,
+            device=args.device,
+        )
+        prompt = tokenizer.decode(input_ids[0], skip_special_tokens=False)
+        synthetic_message = (
+            f"<synthetic prompt: {n_input_tokens} tokens, "
+            f"token_id={token_id}, token_text={token_text!r}>"
+        )
+        return synthetic_message, prompt, input_ids, token_id
+
+    messages = [{"role": "user", "content": input_message}]
+    tokenizer.use_default_system_prompt = True
+    input_ids = _build_input_ids(tokenizer, messages, args.device)
+    prompt = tokenizer.decode(input_ids[0])
+    return input_message, prompt, input_ids, None
+
+
 def _generate_kwargs(args, input_ids, past_kv, draft_past_kv):
     kwargs = {
         "temperature": args.temperature,
         "do_sample": args.do_sample,
         "past_key_values": past_kv,
         "draft_past_key_values": draft_past_kv,
+        "ignore_eos": getattr(args, "ignore_eos", False),
     }
     max_new_tokens = getattr(args, "max_new_tokens", None)
     if max_new_tokens is not None:
@@ -48,6 +90,15 @@ def _generate_kwargs(args, input_ids, past_kv, draft_past_kv):
     else:
         kwargs["max_length"] = args.max_length
     return kwargs
+
+
+def _token_count(token_ids):
+    if hasattr(token_ids, "numel"):
+        return int(token_ids.numel())
+    try:
+        return len(token_ids)
+    except TypeError:
+        return 1
 
 
 def main(builder):
@@ -70,11 +121,9 @@ def main(builder):
             is_profiling = generator.profiling
             generator.profiling = False
             for i in trange(args.warmup_iter, desc='Warming up'):
-                input_message = "Write an essay about large language models."
-                messages = [{"role": "user", "content": input_message}]
-                tokenizer.use_default_system_prompt = True
+                warmup_message = "Write an essay about large language models."
                 with nvtx.annotate("Warm up"):
-                    input_ids = _build_input_ids(tokenizer, messages, args.device)
+                    _, _, input_ids, _ = _prepare_test_input(tokenizer, args, warmup_message)
                     with sdpa_kernel(backends=[SDPBackend.MATH]):
                         generator.generate(
                             input_ids,
@@ -92,33 +141,46 @@ def main(builder):
         args.test_prompt
         or "Do you know what is Beyblade? What is the best strategy to build the strongest Beyblade?"
     )
-    # input_message = "Describe what is large language models to me."
-    messages = [{"role": "user", "content": input_message}]
-    tokenizer.use_default_system_prompt = True
-    input_ids = _build_input_ids(tokenizer, messages, args.device)
-    prompt = tokenizer.decode(input_ids[0])
+    input_message, prompt, input_ids, synthetic_token_id = _prepare_test_input(tokenizer, args, input_message)
     
     start_event = torch.cuda.Event(enable_timing=True)
     end_event = torch.cuda.Event(enable_timing=True)
+    token_timestamps_s = []
+    token_counts = []
+    wall_start_s = None
+
+    def stream_callback(token_ids):
+        if getattr(args, "sync_token_timing", True):
+            torch.cuda.synchronize()
+        token_timestamps_s.append(time.perf_counter() - wall_start_s)
+        token_counts.append(_token_count(token_ids))
                   
     # generate response
     print("Generating response...")
     torch.cuda.cudart().cudaProfilerStart() # start profiling from here
+    wall_start_s = time.perf_counter()
     start_event.record()
     with nvtx.annotate("Generate"):
         with sdpa_kernel(backends=[SDPBackend.MATH]):
             output_ids = generator.generate(
                 input_ids,
                 **_generate_kwargs(args, input_ids, past_kv, draft_past_kv),
+                stream_callback=stream_callback,
             )
     end_event.record()
     
     # Ensure all CUDA kernels are done.
     torch.cuda.synchronize()
+    wall_total_s = time.perf_counter() - wall_start_s
     torch.cuda.cudart().cudaProfilerStop()
     
     total_time_s = start_event.elapsed_time(end_event) / 1000.0
     output = generator.tokenizer.decode(output_ids[0][input_ids.shape[1]:])
+    n_output_tokens = int(output_ids.shape[1] - input_ids.shape[1])
+    ttft_s = token_timestamps_s[0] if token_timestamps_s else None
+    tpot_s = None
+    if ttft_s is not None and n_output_tokens > 1:
+        tpot_s = (wall_total_s - ttft_s) / (n_output_tokens - 1)
 
     # Persist a single-run log (mirrors benchmark JSONL style).
     log_dir = os.path.join(args.log_dir, time.strftime("%Y%m%d-%H%M%S"), "run_test")
@@ -130,9 +192,22 @@ def main(builder):
         "input_message": input_message,
         "prompt": prompt,
         "response": output,
+        "synthetic_input": synthetic_token_id is not None,
+        "synthetic_input_token_id": synthetic_token_id,
+        "test_input_tokens": getattr(args, "test_input_tokens", None),
+        "test_input_token_text": getattr(args, "test_input_token_text", None),
+        "ignore_eos": bool(getattr(args, "ignore_eos", False)),
         "elapsed_time": float(total_time_s),
+        "elapsed_time_wall": float(wall_total_s),
+        "ttft": float(ttft_s) if ttft_s is not None else None,
+        "ttft_ms": float(ttft_s * 1000.0) if ttft_s is not None else None,
+        "tpot": float(tpot_s) if tpot_s is not None else None,
+        "tpot_ms": float(tpot_s * 1000.0) if tpot_s is not None else None,
+        "token_timestamps": [float(ts) for ts in token_timestamps_s],
+        "stream_token_counts": token_counts,
+        "n_stream_callbacks": len(token_timestamps_s),
         "n_prompt_tokens": int(input_ids.shape[1]),
-        "n_output_tokens": int(output_ids.shape[1] - input_ids.shape[1]),
+        "n_output_tokens": n_output_tokens,
         "peak_memory": float(torch.cuda.max_memory_reserved(args.device) / (1024**3)),
     }
     with open(log_file, "a+", encoding="utf-8") as f:
@@ -151,3 +226,7 @@ def main(builder):
     
     if args.print_time:
         print("Time:", total_time_s)
+        if ttft_s is not None:
+            print("TTFT:", ttft_s)
+        if tpot_s is not None:
+            print("TPOT:", tpot_s)

@@ -28,6 +28,9 @@ class HuggingFaceGeneratorBase(GeneratorBase):
         # Not supported via this wrapper (handled at API layer if needed)
         if 'stream_callback' in kwargs:
             kwargs.pop('stream_callback')
+        ignore_eos = bool(kwargs.pop('ignore_eos', False))
+        if ignore_eos:
+            kwargs["eos_token_id"] = None
 
         return self.target_model.generate(
             input_ids=input_ids,

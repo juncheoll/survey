@@ -22,7 +22,10 @@ class AppConfig:
     # Generation parameters
     max_length: int = 2048
     max_new_tokens: Optional[int] = None
+    test_input_tokens: Optional[int] = None
+    test_input_token_text: str = " hello"
     test_prompt: Optional[str] = None
+    ignore_eos: bool = False
     do_sample: bool = False
     temperature: float = 0.0
     
@@ -42,6 +45,7 @@ class AppConfig:
     # Profiling
     generator_profiling: bool = True
     profiling_verbose: bool = True
+    sync_token_timing: bool = True
     print_time: bool = True
     print_message: bool = True
     

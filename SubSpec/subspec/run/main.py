@@ -126,7 +126,10 @@ def _build_settings_snapshot(
         "seed": getattr(config, "seed", None),
         "max_length": getattr(config, "max_length", None),
         "max_new_tokens": getattr(config, "max_new_tokens", None),
+        "test_input_tokens": getattr(config, "test_input_tokens", None),
+        "test_input_token_text": getattr(config, "test_input_token_text", None),
         "test_prompt": getattr(config, "test_prompt", None),
+        "ignore_eos": getattr(config, "ignore_eos", None),
         "do_sample": getattr(config, "do_sample", None),
         "temperature": getattr(config, "temperature", None),
         "warmup_iter": getattr(config, "warmup_iter", None),
@@ -136,6 +139,7 @@ def _build_settings_snapshot(
         "cpu_offload_gb": getattr(config, "cpu_offload_gb", None),
         "generator_profiling": getattr(config, "generator_profiling", None),
         "profiling_verbose": getattr(config, "profiling_verbose", None),
+        "sync_token_timing": getattr(config, "sync_token_timing", None),
         "print_time": getattr(config, "print_time", None),
         "print_message": getattr(config, "print_message", None),
         "log_dir": getattr(config, "log_dir", None),
@@ -304,7 +308,20 @@ def _build_full_parser(base_parser: argparse.ArgumentParser, default_config: Dic
     full_parser.add_argument("--draft-model-path", type=str, default=default_config.get("draft_model_path", None))
     full_parser.add_argument("--max-length", type=int, default=default_config.get("max_length", 2048))
     full_parser.add_argument("--max-new-tokens", type=int, default=default_config.get("max_new_tokens"))
+    full_parser.add_argument("--test-input-tokens", type=int, default=default_config.get("test_input_tokens"))
+    full_parser.add_argument(
+        "--test-input-token-text",
+        type=str,
+        default=default_config.get("test_input_token_text", " hello"),
+        help="Text used to select the repeated token for synthetic run-test prompts",
+    )
     full_parser.add_argument("--test-prompt", type=str, default=default_config.get("test_prompt"))
+    full_parser.add_argument(
+        "--ignore-eos",
+        action=argparse.BooleanOptionalAction,
+        default=default_config.get("ignore_eos", False),
+        help="Disable EOS stopping so run-test can try to generate exactly max_new_tokens",
+    )
     full_parser.add_argument("--seed", type=int, default=default_config.get("seed", 0))
     full_parser.add_argument("--device", type=str, default="cuda:0")
     full_parser.add_argument("--compile-mode", type=str, default=default_config.get("compile_mode", None))
@@ -334,6 +351,12 @@ def _build_full_parser(base_parser: argparse.ArgumentParser, default_config: Dic
         action=argparse.BooleanOptionalAction,
         default=default_config.get("generator_profiling", True),
         help="Enable/disable generator profiling",
+    )
+    full_parser.add_argument(
+        "--sync-token-timing",
+        action=argparse.BooleanOptionalAction,
+        default=default_config.get("sync_token_timing", True),
+        help="Synchronize CUDA in stream callbacks for more accurate TTFT/TPOT measurement",
     )
 
     default_verify_method = str((default_config.get("generator_kwargs") or {}).get("verify_method", "exact") or "exact").strip().lower()
@@ -401,7 +424,10 @@ def _apply_cli_overrides(config: AppConfig, config_args: argparse.Namespace) -> 
     config.draft_model_path = config_args.draft_model_path
     config.max_length = int(config_args.max_length)
     config.max_new_tokens = config_args.max_new_tokens
+    config.test_input_tokens = config_args.test_input_tokens
+    config.test_input_token_text = config_args.test_input_token_text
     config.test_prompt = config_args.test_prompt
+    config.ignore_eos = bool(config_args.ignore_eos)
     config.seed = int(config_args.seed)
     config.device = config_args.device
     config.compile_mode = _normalize_compile_mode(config_args.compile_mode)
@@ -410,6 +436,7 @@ def _apply_cli_overrides(config: AppConfig, config_args: argparse.Namespace) -> 
     config.warmup_iter = int(config_args.warmup_iter)
     config.cache_implementation = config_args.cache_implementation
     config.generator_profiling = bool(config_args.generator_profiling)
+    config.sync_token_timing = bool(config_args.sync_token_timing)
 
     # Optional research toggles: only override when explicitly provided.
     if getattr(config_args, "detailed_analysis", None) is not None:
