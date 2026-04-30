@@ -1,0 +1,3 @@
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/CMakeFiles/argparse-populate.dir
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/CMakeFiles/edit_cache.dir
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/CMakeFiles/rebuild_cache.dir

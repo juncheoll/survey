@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/CMakeFiles/argparse-populate"
+		},
+		{
+			"file" : "/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/CMakeFiles/argparse-populate.rule"
+		},
+		{
+			"file" : "/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/CMakeFiles/argparse-populate-complete.rule"
+		},
+		{
+			"file" : "/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-build.rule"
+		},
+		{
+			"file" : "/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-configure.rule"
+		},
+		{
+			"file" : "/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-download.rule"
+		},
+		{
+			"file" : "/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-install.rule"
+		},
+		{
+			"file" : "/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-mkdir.rule"
+		},
+		{
+			"file" : "/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-patch.rule"
+		},
+		{
+			"file" : "/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-test.rule"
+		},
+		{
+			"file" : "/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"argparse-populate"
+		],
+		"name" : "argparse-populate"
+	}
+}

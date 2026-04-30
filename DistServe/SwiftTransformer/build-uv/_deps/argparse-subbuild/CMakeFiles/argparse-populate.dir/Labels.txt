@@ -1,0 +1,14 @@
+# Target labels
+ argparse-populate
+# Source files and their labels
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/CMakeFiles/argparse-populate
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/CMakeFiles/argparse-populate.rule
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/CMakeFiles/argparse-populate-complete.rule
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-build.rule
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-configure.rule
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-download.rule
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-install.rule
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-mkdir.rule
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-patch.rule
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-test.rule
+/home/th6re8e/survey/DistServe/SwiftTransformer/build-uv/_deps/argparse-subbuild/argparse-populate-prefix/src/argparse-populate-stamp/argparse-populate-update.rule
