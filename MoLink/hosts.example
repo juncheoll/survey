@@ -1,0 +1,10 @@
+# MoLink hostfile example.
+# One line per single-GPU node. The first non-comment host is the API/head node.
+#
+# Single-GPU pipeline across two nodes:
+# 192.168.79.22 slots=1
+# 192.168.79.23 slots=1
+#
+# If nodes use different SSH ports, use ~/.ssh/config aliases:
+# molink-node-1 slots=1
+# molink-node-2 slots=1

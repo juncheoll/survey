@@ -1,0 +1,378 @@
+#!/usr/bin/env bash
+
+set -u
+set -o pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+MODEL="${MODEL:-meta-llama/Llama-2-70b-hf}"
+SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-$MODEL}"
+MODEL_LAYERS="${MODEL_LAYERS:-80}"
+REMOTE_MOLINK_DIR="${REMOTE_MOLINK_DIR:-$SCRIPT_DIR}"
+GPUS_PER_NODE="${GPUS_PER_NODE:-1}"
+UV_BIN="${UV_BIN:-uv}"
+PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
+VLLM_BIN="${VLLM_BIN:-.venv/bin/vllm}"
+SSH_PORT="${SSH_PORT:-}"
+SSH_EXTRA_ARGS="${SSH_EXTRA_ARGS:-}"
+
+HEAD_ADDRESS="${HEAD_ADDRESS:-$(hostname -i | awk '{print $1}')}"
+API_PORT="${API_PORT:-8080}"
+WORKER_API_PORT_BASE="${WORKER_API_PORT_BASE:-9095}"
+GRPC_PORT_BASE="${GRPC_PORT_BASE:-50061}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
+SERVER_START_TIMEOUT_SEC="${SERVER_START_TIMEOUT_SEC:-900}"
+SERVER_START_STAGGER_SEC="${SERVER_START_STAGGER_SEC:-5}"
+
+NUM_PROMPTS="${NUM_PROMPTS:-64}"
+RANDOM_INPUT_LEN="${RANDOM_INPUT_LEN:-1024}"
+RANDOM_OUTPUT_LEN="${RANDOM_OUTPUT_LEN:-512}"
+REQUEST_RATE="${REQUEST_RATE:-inf}"
+MAX_CONCURRENCIES="${MAX_CONCURRENCIES:-1 2 4 8 16 32 64 128 256}"
+IGNORE_EOS="${IGNORE_EOS:-1}"
+MOLINK_EXTRA_SERVER_ARGS="${MOLINK_EXTRA_SERVER_ARGS:-}"
+VLLM_EXTRA_BENCH_ARGS="${VLLM_EXTRA_BENCH_ARGS:-}"
+
+if [[ -z "${LOG_DIR:-}" ]]; then
+  if [[ -d "/logs" && -w "/logs" ]]; then
+    LOG_DIR="/logs/molink"
+  else
+    LOG_DIR="$SCRIPT_DIR/logs/molink"
+  fi
+fi
+
+HOST_NAMES=()
+HOST_SLOTS=()
+
+add_host() {
+  local host="$1"
+  local slots="$2"
+  if [[ "$slots" != "1" ]]; then
+    echo "MoLink benchmark expects single-GPU nodes. Host $host has slots=$slots." >&2
+    exit 2
+  fi
+  HOST_NAMES+=("$host")
+  HOST_SLOTS+=("$slots")
+}
+
+parse_hostfile() {
+  local line
+  local host
+  local slots
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    line="$(echo "$line" | xargs)"
+    [[ -z "$line" ]] && continue
+
+    host="$(awk '{print $1}' <<< "$line")"
+    slots="$(grep -oE 'slots=[0-9]+' <<< "$line" | head -1 | cut -d= -f2)"
+    slots="${slots:-$GPUS_PER_NODE}"
+    add_host "$host" "$slots"
+  done < "$1"
+}
+
+if [[ -n "${HOSTFILE:-}" ]]; then
+  parse_hostfile "$HOSTFILE"
+elif [[ -n "${HOSTS:-}" ]]; then
+  IFS=',' read -r -a HOST_LIST <<< "$HOSTS"
+  for host in "${HOST_LIST[@]}"; do
+    add_host "$host" "$GPUS_PER_NODE"
+  done
+else
+  add_host "127.0.0.1" "$GPUS_PER_NODE"
+fi
+
+NUM_STAGES="${#HOST_NAMES[@]}"
+if [[ "$NUM_STAGES" -eq 0 ]]; then
+  echo "No hosts found. Set HOSTFILE or HOSTS." >&2
+  exit 2
+fi
+
+if [[ "$MODEL_LAYERS" -lt "$NUM_STAGES" ]]; then
+  echo "MODEL_LAYERS=$MODEL_LAYERS is smaller than number of stages=$NUM_STAGES." >&2
+  exit 2
+fi
+
+# shellcheck disable=SC2206
+CONCURRENCY_LIST=($MAX_CONCURRENCIES)
+if [[ "${#CONCURRENCY_LIST[@]}" -eq 0 ]]; then
+  echo "MAX_CONCURRENCIES must contain at least one number. Got: $MAX_CONCURRENCIES" >&2
+  exit 2
+fi
+
+SSH_ARGS=()
+# shellcheck disable=SC2206
+SSH_ARGS+=($SSH_EXTRA_ARGS)
+if [[ -n "$SSH_PORT" ]]; then
+  SSH_ARGS+=(-p "$SSH_PORT")
+fi
+
+remote_quote() {
+  printf "%q" "$1"
+}
+
+run_remote() {
+  local host="$1"
+  local command="$2"
+  ssh "${SSH_ARGS[@]}" "$host" "bash -lc $(remote_quote "$command")"
+}
+
+remote_setup_cmd() {
+  local remote_dir
+  local uv_bin
+  remote_dir="$(remote_quote "$REMOTE_MOLINK_DIR")"
+  uv_bin="$(remote_quote "$UV_BIN")"
+
+  cat <<EOF
+set -e
+cd $remote_dir
+echo "[node] \$(hostname) cwd=\$(pwd)"
+$uv_bin sync
+test -x .venv/bin/python
+.venv/bin/python -c 'import molinkv1'
+EOF
+}
+
+layer_start_for_stage() {
+  local stage="$1"
+  echo $((stage * MODEL_LAYERS / NUM_STAGES))
+}
+
+layer_end_for_stage() {
+  local stage="$1"
+  if [[ "$stage" -eq $((NUM_STAGES - 1)) ]]; then
+    echo "-1"
+  else
+    echo $(((stage + 1) * MODEL_LAYERS / NUM_STAGES))
+  fi
+}
+
+api_port_for_stage() {
+  local stage="$1"
+  if [[ "$stage" -eq 0 ]]; then
+    echo "$API_PORT"
+  else
+    echo $((WORKER_API_PORT_BASE + stage - 1))
+  fi
+}
+
+grpc_port_for_stage() {
+  local stage="$1"
+  echo $((GRPC_PORT_BASE + stage))
+}
+
+RUN_ID="$(date +"%Y%m%d-%H%M%S")"
+RUN_LOG_DIR="$LOG_DIR/$RUN_ID"
+SUMMARY_LOG="$RUN_LOG_DIR/summary.tsv"
+mkdir -p "$RUN_LOG_DIR"
+
+SERVER_PIDS=()
+
+cleanup() {
+  local exit_code=$?
+  for pid in "${SERVER_PIDS[@]:-}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+    fi
+  done
+  for idx in "${!HOST_NAMES[@]}"; do
+    host="${HOST_NAMES[$idx]}"
+    if [[ "$idx" -eq 0 ]]; then
+      pkill -f "molinkv1.entrypoints.api_server" 2>/dev/null || true
+    else
+      run_remote "$host" "pkill -f molinkv1.entrypoints.api_server || true" >/dev/null 2>&1 || true
+    fi
+  done
+  exit "$exit_code"
+}
+trap cleanup EXIT INT TERM
+
+echo "[setup] working directory: $SCRIPT_DIR"
+echo "[setup] log directory: $RUN_LOG_DIR"
+echo "[setup] hosts: ${HOST_NAMES[*]}"
+echo "[setup] stages: $NUM_STAGES"
+echo "[setup] model layers: $MODEL_LAYERS"
+
+for idx in "${!HOST_NAMES[@]}"; do
+  host="${HOST_NAMES[$idx]}"
+  echo "[setup] preparing node: $host"
+  if [[ "$idx" -eq 0 ]]; then
+    bash -lc "$(remote_setup_cmd)"
+  else
+    run_remote "$host" "$(remote_setup_cmd)"
+  fi
+done
+
+source "$SCRIPT_DIR/.venv/bin/activate"
+
+{
+  echo "# framework: MoLink"
+  echo "# run_id: $RUN_ID"
+  echo "# started_at: $(date -Iseconds)"
+  echo "# model: $MODEL"
+  echo "# model_layers: $MODEL_LAYERS"
+  echo "# hosts: ${HOST_NAMES[*]}"
+  echo "# stages: $NUM_STAGES"
+  echo "# head_address: $HEAD_ADDRESS"
+  echo "# api_port: $API_PORT"
+  echo "# grpc_port_base: $GRPC_PORT_BASE"
+  echo "# max_model_len: $MAX_MODEL_LEN"
+  echo "# random_input_len: $RANDOM_INPUT_LEN"
+  echo "# random_output_len: $RANDOM_OUTPUT_LEN"
+  echo "# num_prompts: $NUM_PROMPTS"
+  echo "# max_concurrencies: ${CONCURRENCY_LIST[*]}"
+  echo "# ignore_eos: $IGNORE_EOS"
+  printf "started_at\tended_at\tduration_sec\tmodel\tmax_concurrency\tstatus\texit_code\tserver_logs\tbench_log\tresult_json\n"
+} > "$SUMMARY_LOG"
+
+# shellcheck disable=SC2206
+SERVER_EXTRA=($MOLINK_EXTRA_SERVER_ARGS)
+# shellcheck disable=SC2206
+BENCH_EXTRA=($VLLM_EXTRA_BENCH_ARGS)
+
+HEAD_GRPC_PORT="$(grpc_port_for_stage 0)"
+HEAD_PEER="$HEAD_ADDRESS:$HEAD_GRPC_PORT"
+SERVER_LOGS=()
+
+for idx in "${!HOST_NAMES[@]}"; do
+  host="${HOST_NAMES[$idx]}"
+  start_layer="$(layer_start_for_stage "$idx")"
+  end_layer="$(layer_end_for_stage "$idx")"
+  api_port="$(api_port_for_stage "$idx")"
+  grpc_port="$(grpc_port_for_stage "$idx")"
+  server_log="$RUN_LOG_DIR/server_stage_${idx}_${host}.stdout.log"
+  SERVER_LOGS+=("$server_log")
+
+  server_cmd=(
+    "$PYTHON_BIN" -m molinkv1.entrypoints.api_server
+    --model "$MODEL"
+    --molink-enabled
+    --molink-grpc-port "$grpc_port"
+    --molink-start-layer "$start_layer"
+    --molink-end-layer "$end_layer"
+    --port "$api_port"
+    --max-model-len "$MAX_MODEL_LEN"
+    "${SERVER_EXTRA[@]}"
+  )
+
+  if [[ "$idx" -gt 0 ]]; then
+    server_cmd+=(--molink-initial-peer "$HEAD_PEER")
+  fi
+
+  echo "[serve] starting stage=$idx host=$host layers=${start_layer}:${end_layer} api_port=$api_port grpc_port=$grpc_port"
+  {
+    printf "# host: %s\n" "$host"
+    printf "# layers: %s:%s\n" "$start_layer" "$end_layer"
+    printf "# command:"
+    printf " %q" "${server_cmd[@]}"
+    echo
+    echo
+  } > "$server_log"
+
+  if [[ "$idx" -eq 0 ]]; then
+    (
+      cd "$REMOTE_MOLINK_DIR"
+      "${server_cmd[@]}"
+    ) >> "$server_log" 2>&1 &
+  else
+    remote_dir="$(remote_quote "$REMOTE_MOLINK_DIR")"
+    remote_command="cd $remote_dir && $(printf "%q " "${server_cmd[@]}")"
+    ssh "${SSH_ARGS[@]}" "$host" "bash -lc $(remote_quote "$remote_command")" >> "$server_log" 2>&1 &
+  fi
+  SERVER_PIDS+=("$!")
+  sleep "$SERVER_START_STAGGER_SEC"
+done
+
+echo "[serve] waiting for http://127.0.0.1:$API_PORT/v1/models"
+deadline=$((SECONDS + SERVER_START_TIMEOUT_SEC))
+until "$SCRIPT_DIR/.venv/bin/python" - "127.0.0.1" "$API_PORT" <<'PY'
+import sys
+import urllib.request
+
+host, port = sys.argv[1], sys.argv[2]
+try:
+    with urllib.request.urlopen(f"http://{host}:{port}/v1/models", timeout=2) as response:
+        sys.exit(0 if response.status < 500 else 1)
+except Exception:
+    sys.exit(1)
+PY
+do
+  for pid in "${SERVER_PIDS[@]}"; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "[serve] a server process exited before readiness. See $RUN_LOG_DIR/server_stage_*.stdout.log" >&2
+      exit 1
+    fi
+  done
+  if [[ "$SECONDS" -ge "$deadline" ]]; then
+    echo "[serve] timed out waiting for head API. See $RUN_LOG_DIR/server_stage_0_*.stdout.log" >&2
+    exit 1
+  fi
+  sleep 5
+done
+
+failed=0
+server_logs_joined="$(IFS=,; echo "${SERVER_LOGS[*]}")"
+
+for max_concurrency in "${CONCURRENCY_LIST[@]}"; do
+  bench_log="$RUN_LOG_DIR/bench_concurrency_${max_concurrency}.stdout.log"
+  result_json="$RUN_LOG_DIR/bench_concurrency_${max_concurrency}.json"
+
+  bench_cmd=(
+    "$VLLM_BIN" bench serve
+    --backend openai
+    --model "$SERVED_MODEL_NAME"
+    --base-url "http://127.0.0.1:$API_PORT"
+    --endpoint /v1/completions
+    --dataset-name random
+    --num-prompts "$NUM_PROMPTS"
+    --random-input-len "$RANDOM_INPUT_LEN"
+    --random-output-len "$RANDOM_OUTPUT_LEN"
+    --random-range-ratio 0
+    --request-rate "$REQUEST_RATE"
+    --max-concurrency "$max_concurrency"
+    --save-result
+    --result-dir "$RUN_LOG_DIR"
+    --result-filename "$(basename "$result_json")"
+  )
+
+  if [[ "$IGNORE_EOS" != "0" ]]; then
+    bench_cmd+=(--ignore-eos)
+  fi
+
+  bench_cmd+=("${BENCH_EXTRA[@]}")
+
+  started_at="$(date -Iseconds)"
+  started_sec="$(date +%s)"
+  echo "[bench] running benchmark max_concurrency=$max_concurrency"
+  {
+    printf "# command:"
+    printf " %q" "${bench_cmd[@]}"
+    echo
+    echo
+    "${bench_cmd[@]}"
+  } > "$bench_log" 2>&1
+  exit_code=$?
+  ended_at="$(date -Iseconds)"
+  ended_sec="$(date +%s)"
+  duration_sec=$((ended_sec - started_sec))
+
+  if [[ "$exit_code" -eq 0 ]]; then
+    status="success"
+    echo "[bench] success max_concurrency=$max_concurrency (${duration_sec}s)"
+  else
+    status="failed"
+    failed=$((failed + 1))
+    echo "[bench] failed max_concurrency=$max_concurrency (${duration_sec}s, exit_code=$exit_code)"
+  fi
+
+  printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+    "$started_at" "$ended_at" "$duration_sec" "$MODEL" "$max_concurrency" "$status" "$exit_code" \
+    "$server_logs_joined" "$bench_log" "$result_json" >> "$SUMMARY_LOG"
+done
+
+echo "[done] summary: $SUMMARY_LOG"
+if [[ "$failed" -gt 0 ]]; then
+  exit 1
+fi

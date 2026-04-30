@@ -27,3 +27,17 @@ meta-llama/Llama-2-70b-hf
 sudo apt update
 sudo apt install -y openmpi-bin libopenmpi-dev
 ```
+
+### single-node benchmark automation
+Runs the single-node benchmark scripts for FlexGen, ZeRO-Inference, and SubSpec in sequence.
+
+```
+./run_single_node_benchmarks.sh
+```
+
+Useful overrides:
+- `FRAMEWORKS="FlexGen SubSpec"`: select frameworks.
+- `STOP_ON_FAILURE=1`: stop after the first failed framework.
+- `LOG_DIR=/path/to/logs`: change orchestration log location.
+
+The wrapper writes `summary.tsv` and per-framework stdout logs under `logs/single_node/<run-id>` unless `/logs` is writable.

@@ -28,6 +28,7 @@ REQUEST_RATE="${REQUEST_RATE:-inf}"
 MAX_CONCURRENCIES="${MAX_CONCURRENCIES:-1 2 4 8 16 32 64 128 256}"
 VLLM_EXTRA_SERVE_ARGS="${VLLM_EXTRA_SERVE_ARGS:-}"
 VLLM_EXTRA_BENCH_ARGS="${VLLM_EXTRA_BENCH_ARGS:-}"
+IGNORE_EOS="${IGNORE_EOS:-1}"
 
 if [[ -z "${LOG_DIR:-}" ]]; then
   if [[ -d "/logs" && -w "/logs" ]]; then
@@ -236,6 +237,10 @@ for max_concurrency in "${CONCURRENCY_LIST[@]}"; do
     --result-filename "$(basename "$result_json")"
     "${BENCH_EXTRA[@]}"
   )
+
+  if [[ "$IGNORE_EOS" != "0" ]]; then
+    bench_cmd+=(--ignore-eos)
+  fi
 
   started_at="$(date -Iseconds)"
   started_sec="$(date +%s)"
