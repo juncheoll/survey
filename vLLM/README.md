@@ -14,7 +14,7 @@ vllm serve meta-llama/Llama-2-7b-hf \
 vllm bench serve \
   --backend openai \
   --model meta-llama/Llama-2-7b-hf \
-  --base-url http://0.0.0.0:8080 \
+  --base-url http://0.0.0.0:8000 \
   --endpoint /v1/completions \
   --dataset-name random \
   --num-prompts 64 \
@@ -23,4 +23,10 @@ vllm bench serve \
   --random-range-ratio 0 \
   --request-rate inf \
   --max-concurrency 64
+```
+
+### set environment
+```
+export GLOO_SOCKET_IFNAME=enp7s0
+export NCCL_SOCKET_IFNAME=enp7s0
 ```
