@@ -25,6 +25,7 @@ MAX_MODEL_LEN="${MAX_MODEL_LEN:-2048}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.90}"
 MOLINK_ENFORCE_EAGER="${MOLINK_ENFORCE_EAGER:-1}"
 SERVER_START_TIMEOUT_SEC="${SERVER_START_TIMEOUT_SEC:-900}"
+STAGE_START_TIMEOUT_SEC="${STAGE_START_TIMEOUT_SEC:-$SERVER_START_TIMEOUT_SEC}"
 SERVER_START_STAGGER_SEC="${SERVER_START_STAGGER_SEC:-5}"
 PIPELINE_READY_GRACE_SEC="${PIPELINE_READY_GRACE_SEC:-5}"
 CLEANUP_EXISTING_SERVERS="${CLEANUP_EXISTING_SERVERS:-1}"
@@ -190,6 +191,100 @@ check_remote_tcp() {
   run_remote "$host" "$command" >/dev/null 2>&1
 }
 
+check_stage_grpc() {
+  local host="$1"
+  local port="$2"
+  if [[ "$host" == "$HEAD_HOST" ]]; then
+    check_local_tcp "127.0.0.1" "$port" || check_local_tcp "$HEAD_ADDRESS" "$port"
+  else
+    check_remote_tcp "$host" "$port"
+  fi
+}
+
+check_head_topology_count() {
+  local expected="$1"
+  "$SCRIPT_DIR/.venv/bin/python" - "$HEAD_PEER" "$expected" <<'PY'
+import asyncio
+import sys
+
+import grpc
+
+from molinkv1.comm import molink_pb2, molink_pb2_grpc
+from molinkv1.utils import get_grpc_options
+
+
+async def main() -> int:
+    address, expected = sys.argv[1], int(sys.argv[2])
+    channel = grpc.aio.insecure_channel(address, options=get_grpc_options())
+    try:
+        stub = molink_pb2_grpc.MolinkServiceStub(channel)
+        topology = await stub.GetTopology(molink_pb2.HealthCheckRequest(), timeout=2)
+        return 0 if len(topology.nodes) >= expected else 1
+    except Exception:
+        return 1
+    finally:
+        await channel.close()
+
+
+raise SystemExit(asyncio.run(main()))
+PY
+}
+
+wait_for_stage_grpc() {
+  local idx="$1"
+  local host="$2"
+  local port="$3"
+  local pid="$4"
+  local log_file="$5"
+  local deadline
+
+  echo "[serve] waiting for stage=$idx host=$host grpc_port=$port"
+  deadline=$((SECONDS + STAGE_START_TIMEOUT_SEC))
+  until check_stage_grpc "$host" "$port"; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "[serve] server process exited during startup: stage=$idx host=$host grpc_port=$port" >&2
+      echo "[serve] log: $log_file" >&2
+      tail -n 80 "$log_file" >&2 || true
+      exit 1
+    fi
+    if [[ "$SECONDS" -ge "$deadline" ]]; then
+      echo "[serve] timed out waiting for stage=$idx host=$host grpc_port=$port" >&2
+      echo "[serve] log: $log_file" >&2
+      tail -n 80 "$log_file" >&2 || true
+      exit 1
+    fi
+    sleep 5
+  done
+  echo "[serve] stage=$idx grpc is ready"
+}
+
+wait_for_topology_count() {
+  local expected="$1"
+  local idx="$2"
+  local pid="$3"
+  local log_file="$4"
+  local deadline
+
+  echo "[serve] waiting for head topology to include $expected stage(s)"
+  deadline=$((SECONDS + STAGE_START_TIMEOUT_SEC))
+  until check_head_topology_count "$expected"; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "[serve] server process exited before joining topology: stage=$idx" >&2
+      echo "[serve] log: $log_file" >&2
+      tail -n 80 "$log_file" >&2 || true
+      exit 1
+    fi
+    if [[ "$SECONDS" -ge "$deadline" ]]; then
+      echo "[serve] timed out waiting for stage=$idx to join head topology" >&2
+      echo "[serve] log: $log_file" >&2
+      tail -n 80 "$log_file" >&2 || true
+      exit 1
+    fi
+    sleep 5
+  done
+  echo "[serve] head topology has $expected stage(s)"
+}
+
 remote_setup_cmd() {
   local remote_dir
   local uv_bin
@@ -240,6 +335,8 @@ SUMMARY_LOG="$RUN_LOG_DIR/summary.tsv"
 mkdir -p "$RUN_LOG_DIR"
 
 SERVER_PIDS=()
+SERVER_PID_LABELS=()
+SERVER_PID_LOGS=()
 
 cleanup() {
   local exit_code=$?
@@ -307,6 +404,7 @@ source "$SCRIPT_DIR/.venv/bin/activate"
   echo "# max_model_len: $MAX_MODEL_LEN"
   echo "# gpu_memory_utilization: $GPU_MEMORY_UTILIZATION"
   echo "# enforce_eager: $MOLINK_ENFORCE_EAGER"
+  echo "# stage_start_timeout_sec: $STAGE_START_TIMEOUT_SEC"
   echo "# pipeline_ready_grace_sec: $PIPELINE_READY_GRACE_SEC"
   echo "# random_input_len: $RANDOM_INPUT_LEN"
   echo "# random_output_len: $RANDOM_OUTPUT_LEN"
@@ -387,44 +485,70 @@ for idx in "${!STAGE_HOSTS[@]}"; do
     ssh "${SSH_ARGS[@]}" "$host" "bash -lc $(remote_quote "$remote_command")" >> "$server_log" 2>&1 &
   fi
   SERVER_PIDS+=("$!")
-  sleep "$SERVER_START_STAGGER_SEC"
+  SERVER_PID_LABELS+=("stage=$idx host=$host gpu=$gpu_id grpc_port=$grpc_port")
+  SERVER_PID_LOGS+=("$server_log")
+
+  if [[ "$idx" -eq 0 ]]; then
+    wait_for_stage_grpc "$idx" "$host" "$grpc_port" "$!" "$server_log"
+    wait_for_topology_count 1 "$idx" "$!" "$server_log"
+    if [[ "$NUM_STAGES" -gt 1 && "$SERVER_START_STAGGER_SEC" -gt 0 ]]; then
+      sleep "$SERVER_START_STAGGER_SEC"
+    fi
+  fi
 done
 
 echo "[serve] waiting for all MoLink stages"
 deadline=$((SECONDS + SERVER_START_TIMEOUT_SEC))
 while true; do
   ready=1
-
-  if ! check_local_http_models "127.0.0.1" "$API_PORT"; then
-    ready=0
-  fi
+  grpc_ready=1
+  not_ready_stages=()
 
   for idx in "${!STAGE_HOSTS[@]}"; do
     host="${STAGE_HOSTS[$idx]}"
     grpc_port="${STAGE_GRPC_PORTS[$idx]}"
     if [[ "$host" == "$HEAD_HOST" ]]; then
-      if ! check_local_tcp "127.0.0.1" "$grpc_port"; then
+      if ! check_local_tcp "127.0.0.1" "$grpc_port" && ! check_local_tcp "$HEAD_ADDRESS" "$grpc_port"; then
         ready=0
+        grpc_ready=0
+        not_ready_stages+=("stage=$idx host=$host grpc_port=$grpc_port")
       fi
     else
       if ! check_remote_tcp "$host" "$grpc_port"; then
         ready=0
+        grpc_ready=0
+        not_ready_stages+=("stage=$idx host=$host grpc_port=$grpc_port")
       fi
     fi
   done
+
+  if [[ "$grpc_ready" -eq 1 ]] && ! check_head_topology_count "$NUM_STAGES"; then
+    ready=0
+    not_ready_stages+=("head_topology_count<$NUM_STAGES")
+  fi
+
+  if [[ "$grpc_ready" -eq 1 ]] && check_head_topology_count "$NUM_STAGES"; then
+    if ! check_local_http_models "127.0.0.1" "$API_PORT"; then
+      ready=0
+    fi
+  fi
 
   if [[ "$ready" -eq 1 ]]; then
     break
   fi
 
-  for pid in "${SERVER_PIDS[@]}"; do
+  for pid_idx in "${!SERVER_PIDS[@]}"; do
+    pid="${SERVER_PIDS[$pid_idx]}"
     if ! kill -0 "$pid" 2>/dev/null; then
-      echo "[serve] a server process exited before readiness. See $RUN_LOG_DIR/server_stage_*.stdout.log" >&2
+      echo "[serve] server process exited before readiness: ${SERVER_PID_LABELS[$pid_idx]}" >&2
+      echo "[serve] log: ${SERVER_PID_LOGS[$pid_idx]}" >&2
+      tail -n 40 "${SERVER_PID_LOGS[$pid_idx]}" >&2 || true
       exit 1
     fi
   done
   if [[ "$SECONDS" -ge "$deadline" ]]; then
-    echo "[serve] timed out waiting for head API. See $RUN_LOG_DIR/server_stage_0_*.stdout.log" >&2
+    echo "[serve] timed out waiting for all MoLink stages. Not ready: ${not_ready_stages[*]:-head API}" >&2
+    echo "[serve] see $RUN_LOG_DIR/server_stage_*.stdout.log" >&2
     exit 1
   fi
   sleep 5
