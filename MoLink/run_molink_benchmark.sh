@@ -26,6 +26,7 @@ GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.90}"
 MOLINK_ENFORCE_EAGER="${MOLINK_ENFORCE_EAGER:-1}"
 SERVER_START_TIMEOUT_SEC="${SERVER_START_TIMEOUT_SEC:-900}"
 SERVER_START_STAGGER_SEC="${SERVER_START_STAGGER_SEC:-5}"
+PIPELINE_READY_GRACE_SEC="${PIPELINE_READY_GRACE_SEC:-5}"
 CLEANUP_EXISTING_SERVERS="${CLEANUP_EXISTING_SERVERS:-1}"
 
 NUM_PROMPTS="${NUM_PROMPTS:-64}"
@@ -147,6 +148,48 @@ run_remote() {
   ssh "${SSH_ARGS[@]}" "$host" "bash -lc $(remote_quote "$command")"
 }
 
+check_local_http_models() {
+  local host="$1"
+  local port="$2"
+  "$SCRIPT_DIR/.venv/bin/python" - "$host" "$port" <<'PY'
+import sys
+import urllib.request
+
+host, port = sys.argv[1], sys.argv[2]
+try:
+    with urllib.request.urlopen(f"http://{host}:{port}/v1/models", timeout=2) as response:
+        sys.exit(0 if response.status < 500 else 1)
+except Exception:
+    sys.exit(1)
+PY
+}
+
+check_local_tcp() {
+  local host="$1"
+  local port="$2"
+  "$SCRIPT_DIR/.venv/bin/python" - "$host" "$port" <<'PY'
+import socket
+import sys
+
+host, port = sys.argv[1], int(sys.argv[2])
+try:
+    with socket.create_connection((host, port), timeout=2):
+        sys.exit(0)
+except OSError:
+    sys.exit(1)
+PY
+}
+
+check_remote_tcp() {
+  local host="$1"
+  local port="$2"
+  local remote_dir
+  local command
+  remote_dir="$(remote_quote "$REMOTE_MOLINK_DIR")"
+  command="cd $remote_dir && .venv/bin/python -c 'import socket, sys; socket.create_connection((\"127.0.0.1\", int(sys.argv[1])), timeout=2).close()' $(remote_quote "$port")"
+  run_remote "$host" "$command" >/dev/null 2>&1
+}
+
 remote_setup_cmd() {
   local remote_dir
   local uv_bin
@@ -264,6 +307,7 @@ source "$SCRIPT_DIR/.venv/bin/activate"
   echo "# max_model_len: $MAX_MODEL_LEN"
   echo "# gpu_memory_utilization: $GPU_MEMORY_UTILIZATION"
   echo "# enforce_eager: $MOLINK_ENFORCE_EAGER"
+  echo "# pipeline_ready_grace_sec: $PIPELINE_READY_GRACE_SEC"
   echo "# random_input_len: $RANDOM_INPUT_LEN"
   echo "# random_output_len: $RANDOM_OUTPUT_LEN"
   echo "# num_prompts: $NUM_PROMPTS"
@@ -281,6 +325,8 @@ BENCH_EXTRA=($VLLM_EXTRA_BENCH_ARGS)
 HEAD_GRPC_PORT="$(grpc_port_for_stage 0)"
 HEAD_PEER="$HEAD_ADDRESS:$HEAD_GRPC_PORT"
 SERVER_LOGS=()
+STAGE_API_PORTS=()
+STAGE_GRPC_PORTS=()
 
 for idx in "${!STAGE_HOSTS[@]}"; do
   host="${STAGE_HOSTS[$idx]}"
@@ -293,6 +339,8 @@ for idx in "${!STAGE_HOSTS[@]}"; do
   safe_stage_label="${stage_label//[^A-Za-z0-9_.-]/_}"
   server_log="$RUN_LOG_DIR/server_stage_${idx}_${safe_stage_label}.stdout.log"
   SERVER_LOGS+=("$server_log")
+  STAGE_API_PORTS+=("$api_port")
+  STAGE_GRPC_PORTS+=("$grpc_port")
 
   server_cmd=(
     "$PYTHON_BIN" -m molinkv1.entrypoints.api_server
@@ -342,20 +390,33 @@ for idx in "${!STAGE_HOSTS[@]}"; do
   sleep "$SERVER_START_STAGGER_SEC"
 done
 
-echo "[serve] waiting for http://127.0.0.1:$API_PORT/v1/models"
+echo "[serve] waiting for all MoLink stages"
 deadline=$((SECONDS + SERVER_START_TIMEOUT_SEC))
-until "$SCRIPT_DIR/.venv/bin/python" - "127.0.0.1" "$API_PORT" <<'PY'
-import sys
-import urllib.request
+while true; do
+  ready=1
 
-host, port = sys.argv[1], sys.argv[2]
-try:
-    with urllib.request.urlopen(f"http://{host}:{port}/v1/models", timeout=2) as response:
-        sys.exit(0 if response.status < 500 else 1)
-except Exception:
-    sys.exit(1)
-PY
-do
+  if ! check_local_http_models "127.0.0.1" "$API_PORT"; then
+    ready=0
+  fi
+
+  for idx in "${!STAGE_HOSTS[@]}"; do
+    host="${STAGE_HOSTS[$idx]}"
+    grpc_port="${STAGE_GRPC_PORTS[$idx]}"
+    if [[ "$host" == "$HEAD_HOST" ]]; then
+      if ! check_local_tcp "127.0.0.1" "$grpc_port"; then
+        ready=0
+      fi
+    else
+      if ! check_remote_tcp "$host" "$grpc_port"; then
+        ready=0
+      fi
+    fi
+  done
+
+  if [[ "$ready" -eq 1 ]]; then
+    break
+  fi
+
   for pid in "${SERVER_PIDS[@]}"; do
     if ! kill -0 "$pid" 2>/dev/null; then
       echo "[serve] a server process exited before readiness. See $RUN_LOG_DIR/server_stage_*.stdout.log" >&2
@@ -368,6 +429,11 @@ do
   fi
   sleep 5
 done
+
+if [[ "$PIPELINE_READY_GRACE_SEC" -gt 0 ]]; then
+  echo "[serve] all stages are reachable; waiting ${PIPELINE_READY_GRACE_SEC}s for topology to settle"
+  sleep "$PIPELINE_READY_GRACE_SEC"
+fi
 
 failed=0
 server_logs_joined="$(IFS=,; echo "${SERVER_LOGS[*]}")"
