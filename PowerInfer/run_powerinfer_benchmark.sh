@@ -27,13 +27,13 @@ INSTALL_REQUIREMENTS="${INSTALL_REQUIREMENTS:-0}"
 RUN_BUILD="${RUN_BUILD:-1}"
 CMAKE_FLAGS="${CMAKE_FLAGS:--DLLAMA_CUBLAS=ON}"
 BUILD_JOBS="${BUILD_JOBS:-$(nproc)}"
-N_KV_MAX="${N_KV_MAX:-2048}"
+N_KV_MAX="${N_KV_MAX:-auto}"
 IS_PP_SHARED="${IS_PP_SHARED:-0}"
-VRAM_BUDGET_GB="${VRAM_BUDGET_GB:-9}"
+VRAM_BUDGET_GB="${VRAM_BUDGET_GB:-8.5}"
 MMQ="${MMQ:-0}"
-PP_LIST="${PP_LIST:-}"
-TG_LIST="${TG_LIST:-}"
-PL_LIST="${PL_LIST:-}"
+PP_LIST="${PP_LIST:-1024}"
+TG_LIST="${TG_LIST:-256}"
+PL_LIST="${PL_LIST:-1,2,4,8,16,32}"
 MODEL_FILE_GLOB="${MODEL_FILE_GLOB:-*.gguf}"
 DOWNLOAD_MODELS="${DOWNLOAD_MODELS:-1}"
 HF_CLI="${HF_CLI:-hf}"
@@ -44,6 +44,36 @@ if [[ -z "$PP_LIST" && ( -n "$TG_LIST" || -n "$PL_LIST" ) ]]; then
 fi
 if [[ -z "$TG_LIST" && -n "$PL_LIST" ]]; then
   echo "TG_LIST must be set when PL_LIST is set, because batched-bench parses positional workload lists." >&2
+  exit 2
+fi
+
+max_csv() {
+  local values="$1"
+  local max=0
+  local value
+  local -a csv_values
+
+  IFS=',' read -r -a csv_values <<< "$values"
+  for value in "${csv_values[@]}"; do
+    if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+      echo "Expected comma-separated positive integers, got: $values" >&2
+      return 1
+    fi
+    if (( value > max )); then
+      max="$value"
+    fi
+  done
+
+  printf "%s\n" "$max"
+}
+
+if ! max_pp="$(max_csv "$PP_LIST")"; then
+  exit 2
+fi
+if ! max_tg="$(max_csv "$TG_LIST")"; then
+  exit 2
+fi
+if ! max_csv "$PL_LIST" >/dev/null; then
   exit 2
 fi
 
@@ -182,7 +212,7 @@ resolve_model_file() {
   echo "# pp_list: ${PP_LIST:-bench_default}"
   echo "# tg_list: ${TG_LIST:-bench_default}"
   echo "# pl_list: ${PL_LIST:-bench_default}"
-  printf "started_at\tended_at\tduration_sec\tmodel\tmodel_path\tstatus\texit_code\tstdout_log\n"
+  printf "started_at\tended_at\tduration_sec\tmodel\tbatch_size\tn_kv_max\tmodel_path\tstatus\texit_code\tstdout_log\n"
 } > "$SUMMARY_LOG"
 
 total=0
@@ -192,7 +222,7 @@ failed=0
 run_one() {
   local model="$1"
   local safe_model="${model//\//_}"
-  local stdout_log="$RUN_LOG_DIR/${safe_model}.stdout.log"
+  local stdout_log
   local started_at
   local started_sec
   local ended_at
@@ -202,11 +232,14 @@ run_one() {
   local status
   local model_dir
   local model_path
+  local pl
+  local run_n_kv_max
+  local -a pl_values
   local -a cmd
 
-  total=$((total + 1))
-
   if ! model_dir="$(resolve_model_dir "$model")"; then
+    total=$((total + 1))
+    stdout_log="$RUN_LOG_DIR/${safe_model}.download.stdout.log"
     started_at="$(date -Iseconds)"
     ended_at="$started_at"
     status="download_failed"
@@ -216,13 +249,15 @@ run_one() {
       echo "Failed to resolve or download model: $model"
       echo "See the parent PowerInfer stdout log for the downloader output."
     } > "$stdout_log"
-    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-      "$started_at" "$ended_at" "0" "$model" "" "$status" "$exit_code" "$stdout_log" >> "$SUMMARY_LOG"
+    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+      "$started_at" "$ended_at" "0" "$model" "" "" "" "$status" "$exit_code" "$stdout_log" >> "$SUMMARY_LOG"
     echo "[run] download failed: $model"
     return
   fi
 
   if ! model_path="$(resolve_model_file "$model_dir")"; then
+    total=$((total + 1))
+    stdout_log="$RUN_LOG_DIR/${safe_model}.missing_model_file.stdout.log"
     started_at="$(date -Iseconds)"
     ended_at="$started_at"
     status="missing_model_file"
@@ -231,63 +266,73 @@ run_one() {
     {
       echo "No GGUF model file found under: $model_dir"
     } > "$stdout_log"
-    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-      "$started_at" "$ended_at" "0" "$model" "" "$status" "$exit_code" "$stdout_log" >> "$SUMMARY_LOG"
+    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+      "$started_at" "$ended_at" "0" "$model" "" "" "" "$status" "$exit_code" "$stdout_log" >> "$SUMMARY_LOG"
     echo "[run] missing GGUF: $model"
     return
   fi
 
-  cmd=(
-    "$BENCH_BIN"
-    "$model_path"
-    "$N_KV_MAX"
-    "$IS_PP_SHARED"
-    "$VRAM_BUDGET_GB"
-    "$MMQ"
-  )
+  IFS=',' read -r -a pl_values <<< "$PL_LIST"
+  for pl in "${pl_values[@]}"; do
+    total=$((total + 1))
+    if [[ "$N_KV_MAX" == "auto" ]]; then
+      if [[ "$IS_PP_SHARED" == "0" ]]; then
+        run_n_kv_max=$((pl * (max_pp + max_tg)))
+      else
+        run_n_kv_max=$((max_pp + pl * max_tg))
+      fi
+    else
+      run_n_kv_max="$N_KV_MAX"
+    fi
 
-  if [[ -n "$PP_LIST" ]]; then
-    cmd+=("$PP_LIST")
-  fi
-  if [[ -n "$TG_LIST" ]]; then
-    cmd+=("$TG_LIST")
-  fi
-  if [[ -n "$PL_LIST" ]]; then
-    cmd+=("$PL_LIST")
-  fi
+    stdout_log="$RUN_LOG_DIR/${safe_model}_bs${pl}.stdout.log"
+    cmd=(
+      "$BENCH_BIN"
+      "$model_path"
+      "$run_n_kv_max"
+      "$IS_PP_SHARED"
+      "$VRAM_BUDGET_GB"
+      "$MMQ"
+      "$PP_LIST"
+      "$TG_LIST"
+      "$pl"
+    )
 
-  started_at="$(date -Iseconds)"
-  started_sec="$(date +%s)"
+    started_at="$(date -Iseconds)"
+    started_sec="$(date +%s)"
 
-  echo "[run] $model"
-  {
-    echo "# started_at: $started_at"
-    echo "# model_dir: $model_dir"
-    echo "# model_path: $model_path"
-    printf "# command:"
-    printf " %q" "${cmd[@]}"
-    echo
-    echo
-    "${cmd[@]}"
-  } > "$stdout_log" 2>&1
-  exit_code=$?
+    echo "[run] $model bs=$pl n_kv_max=$run_n_kv_max"
+    {
+      echo "# started_at: $started_at"
+      echo "# model_dir: $model_dir"
+      echo "# model_path: $model_path"
+      echo "# batch_size: $pl"
+      echo "# n_kv_max: $run_n_kv_max"
+      printf "# command:"
+      printf " %q" "${cmd[@]}"
+      echo
+      echo
+      "${cmd[@]}"
+    } > "$stdout_log" 2>&1
+    exit_code=$?
 
-  ended_at="$(date -Iseconds)"
-  ended_sec="$(date +%s)"
-  duration_sec=$((ended_sec - started_sec))
+    ended_at="$(date -Iseconds)"
+    ended_sec="$(date +%s)"
+    duration_sec=$((ended_sec - started_sec))
 
-  if [[ "$exit_code" -eq 0 ]]; then
-    status="success"
-    success=$((success + 1))
-    echo "[run] success: $model (${duration_sec}s)"
-  else
-    status="failed"
-    failed=$((failed + 1))
-    echo "[run] failed: $model (${duration_sec}s, exit_code=$exit_code)"
-  fi
+    if [[ "$exit_code" -eq 0 ]]; then
+      status="success"
+      success=$((success + 1))
+      echo "[run] success: $model bs=$pl (${duration_sec}s)"
+    else
+      status="failed"
+      failed=$((failed + 1))
+      echo "[run] failed: $model bs=$pl (${duration_sec}s, exit_code=$exit_code)"
+    fi
 
-  printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-    "$started_at" "$ended_at" "$duration_sec" "$model" "$model_path" "$status" "$exit_code" "$stdout_log" >> "$SUMMARY_LOG"
+    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+      "$started_at" "$ended_at" "$duration_sec" "$model" "$pl" "$run_n_kv_max" "$model_path" "$status" "$exit_code" "$stdout_log" >> "$SUMMARY_LOG"
+  done
 }
 
 for model in "${MODELS[@]}"; do
