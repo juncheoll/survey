@@ -51,7 +51,7 @@ The script runs `uv sync`, activates `.venv`, and benchmarks:
 - `meta-llama/Llama-2-13b-hf`
 - `huggyllama/llama-30b`
 
-Each model is tested with the configured batch sizes using `--prompt-len 1024` and `--gen-len 512`.
+Each model is tested with the configured batch sizes using `--prompt-len 1024` and `--gen-len 256`.
 For each batch size, the script runs both the default mode and the 4-bit quantized mode with `--quant-bits 4`.
 
 Useful overrides:

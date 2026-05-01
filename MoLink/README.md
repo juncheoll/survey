@@ -62,10 +62,13 @@ Defaults:
 - `MODEL_LAYERS=80`
 - `MAX_MODEL_LEN=4096`
 - `RANDOM_INPUT_LEN=1024`
-- `RANDOM_OUTPUT_LEN=512`
+- `RANDOM_OUTPUT_LEN=256`
 - `NUM_PROMPTS=64`
+- `NUM_PROMPTS_PER_CONCURRENCY=0`
 - `MAX_CONCURRENCIES="1 2 4 8"`
 - `IGNORE_EOS=1`
+
+`NUM_PROMPTS` is the total number of requests sent for each benchmark run. `MAX_CONCURRENCIES` is the maximum number of in-flight requests and is the closest knob to request-level batch size for `vllm bench serve`. To measure one wave of exactly `batch_size` requests, set `NUM_PROMPTS_PER_CONCURRENCY=1`; the script will use `--num-prompts` equal to the current `--max-concurrency`.
 
 Useful overrides:
 - `SSH_PORT=2222`: use the same non-default SSH port for every worker.
@@ -73,6 +76,9 @@ Useful overrides:
 - `GPUS_PER_NODE=4`: when using `HOSTS` instead of `HOSTFILE`, expand each host into four GPU stages.
 - `GPU_MEMORY_UTILIZATION=0.75`: pass a lower `--gpu-memory-utilization` to each MoLink server.
 - `CLEANUP_EXISTING_SERVERS=0`: skip the pre-launch cleanup of existing MoLink API servers.
+- `RANDOM_OUTPUT_LEN=256`: number of generated tokens per request.
+- `NUM_PROMPTS=64`: total requests per `MAX_CONCURRENCIES` run.
+- `NUM_PROMPTS_PER_CONCURRENCY=1`: set `--num-prompts` equal to each `MAX_CONCURRENCIES` value.
 - `MAX_CONCURRENCIES="16 32 64"`: sweep benchmark concurrency values.
 - `IGNORE_EOS=0`: omit `--ignore-eos` from `vllm bench serve`.
 - `MOLINK_EXTRA_SERVER_ARGS="..."`: append extra args to each MoLink server.

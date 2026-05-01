@@ -48,7 +48,7 @@ The script runs `uv sync`, activates `.venv`, and benchmarks:
 - `meta-llama/Llama-2-13b-hf`
 - `huggyllama/llama-30b`
 
-Each model is tested with GPU batch sizes `1`, `2`, `4`, and `8`, using `--prompt-len 1024` and `--gen-len 512`.
+Each model is tested with GPU batch sizes `1`, `2`, `4`, and `8`, using `--prompt-len 1024` and `--gen-len 256`.
 For each batch size, the script runs both the default mode and the weight-compressed mode with `--compress-weight`.
 The weight-compressed mode also includes `meta-llama/Llama-2-70b-hf`.
 

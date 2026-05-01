@@ -24,8 +24,9 @@ STOP_RAY_ON_EXIT="${STOP_RAY_ON_EXIT:-0}"
 VLLM_DISTRIBUTED_EXECUTOR_BACKEND="${VLLM_DISTRIBUTED_EXECUTOR_BACKEND:-auto}"
 SERVER_START_TIMEOUT_SEC="${SERVER_START_TIMEOUT_SEC:-900}"
 NUM_PROMPTS="${NUM_PROMPTS:-64}"
+NUM_PROMPTS_PER_CONCURRENCY="${NUM_PROMPTS_PER_CONCURRENCY:-0}"
 RANDOM_INPUT_LEN="${RANDOM_INPUT_LEN:-1024}"
-RANDOM_OUTPUT_LEN="${RANDOM_OUTPUT_LEN:-512}"
+RANDOM_OUTPUT_LEN="${RANDOM_OUTPUT_LEN:-256}"
 REQUEST_RATE="${REQUEST_RATE:-inf}"
 MAX_CONCURRENCIES="${MAX_CONCURRENCIES:-1 2 4 8 16 32 64 128 256}"
 VLLM_EXTRA_SERVE_ARGS="${VLLM_EXTRA_SERVE_ARGS:-}"
@@ -171,6 +172,7 @@ fi
   echo "# random_input_len: $RANDOM_INPUT_LEN"
   echo "# random_output_len: $RANDOM_OUTPUT_LEN"
   echo "# num_prompts: $NUM_PROMPTS"
+  echo "# num_prompts_per_concurrency: $NUM_PROMPTS_PER_CONCURRENCY"
   echo "# max_concurrencies: ${CONCURRENCY_LIST[*]}"
   printf "started_at\tended_at\tduration_sec\tmodel\tmax_concurrency\tstatus\texit_code\tserver_log\tbench_log\tresult_json\n"
 } > "$SUMMARY_LOG"
@@ -247,6 +249,12 @@ done
 failed=0
 
 for max_concurrency in "${CONCURRENCY_LIST[@]}"; do
+  if [[ "$NUM_PROMPTS_PER_CONCURRENCY" != "0" ]]; then
+    run_num_prompts="$max_concurrency"
+  else
+    run_num_prompts="$NUM_PROMPTS"
+  fi
+
   bench_log="$RUN_LOG_DIR/bench_concurrency_${max_concurrency}.stdout.log"
   result_json="$RUN_LOG_DIR/bench_concurrency_${max_concurrency}.json"
 
@@ -257,7 +265,7 @@ for max_concurrency in "${CONCURRENCY_LIST[@]}"; do
     --base-url "http://$BENCH_HOST:$SERVE_PORT"
     --endpoint /v1/completions
     --dataset-name random
-    --num-prompts "$NUM_PROMPTS"
+    --num-prompts "$run_num_prompts"
     --random-input-len "$RANDOM_INPUT_LEN"
     --random-output-len "$RANDOM_OUTPUT_LEN"
     --random-range-ratio 0
@@ -275,7 +283,7 @@ for max_concurrency in "${CONCURRENCY_LIST[@]}"; do
 
   started_at="$(date -Iseconds)"
   started_sec="$(date +%s)"
-  echo "[bench] running benchmark max_concurrency=$max_concurrency"
+  echo "[bench] running benchmark max_concurrency=$max_concurrency num_prompts=$run_num_prompts"
   {
     printf "# command:"
     printf " %q" "${bench_cmd[@]}"

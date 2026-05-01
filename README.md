@@ -82,3 +82,15 @@ Useful overrides:
 The wrapper passes `HEAD_ADDRESS` and `HEAD_IP` to child scripts. If only one is set, it reuses that value for the other. MoLink maps one pipeline stage to one GPU slot, so a hostfile with `slots=4` starts four MoLink stages on that host.
 
 The wrapper writes `summary.tsv` and per-framework stdout logs under `logs/multi_node/<run-id>` unless `/logs` is writable.
+
+
+
+
+
+
+
+
+
+GPU_COUNTS="8" \
+NUM_PROMPTS_PER_CONCURRENCY=1 \
+./run_single_node_multi_gpu_benchmarks.sh

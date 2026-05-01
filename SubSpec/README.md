@@ -3,7 +3,7 @@
 python -m run.main \
   --config configs/exp_offloading/subspec_sd_llama_7b_vram_10gb.yaml \
   --test-input-tokens 1024 \
-  --max-new-tokens 512 \
+  --max-new-tokens 256 \
   --ignore-eos \
   run-test
 ```
@@ -18,7 +18,7 @@ The script runs `uv sync`, activates `.venv`, and runs all model sizes:
 - `13b`
 - `30b`
 
-By default, each model is tested with VRAM limits `10`, `12`, and `16` GB, using `--test-input-tokens 1024`, `--max-new-tokens 512`, and `--ignore-eos`.
+By default, each model is tested with VRAM limits `10`, `12`, and `16` GB, using `--test-input-tokens 1024`, `--max-new-tokens 256`, and `--ignore-eos`.
 
 Select VRAM limits by passing them as arguments:
 

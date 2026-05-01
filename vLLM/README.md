@@ -65,8 +65,9 @@ Defaults:
 - `TENSOR_PARALLEL_SIZE=auto`: uses the first host's slots.
 - `PIPELINE_PARALLEL_SIZE=auto`: uses the number of hosts.
 - `RANDOM_INPUT_LEN=1024`
-- `RANDOM_OUTPUT_LEN=512`
+- `RANDOM_OUTPUT_LEN=256`
 - `NUM_PROMPTS=64`
+- `NUM_PROMPTS_PER_CONCURRENCY=0`
 - `MAX_CONCURRENCIES="1 2 4 8"`
 - `MAX_NUM_SEQS` is unset by default, so vLLM uses its own server-side default.
 
@@ -74,6 +75,7 @@ Useful overrides:
 - `RUN_RAY_SETUP=0`: reuse an existing Ray cluster.
 - `RAY_STOP_FIRST=0`: do not stop existing Ray processes during setup.
 - `MAX_CONCURRENCIES="16 32 64"`: sweep benchmark concurrency values.
+- `NUM_PROMPTS_PER_CONCURRENCY=1`: set `--num-prompts` equal to each `MAX_CONCURRENCIES` value.
 - `MAX_NUM_SEQS=64`: explicitly set vLLM server-side max sequences.
 - `SSH_PORT=2222`: use the same non-default SSH port for every worker.
 - `VLLM_EXTRA_SERVE_ARGS="..."`: append extra args to `vllm serve`.
