@@ -10,6 +10,7 @@ HEAD_IP="${HEAD_IP:-$(hostname -i | awk '{print $1}')}"
 MPI_EXTRA_ARGS="${MPI_EXTRA_ARGS:-}"
 MPI_PREFIX="${MPI_PREFIX:-}"
 SSH_PORT="${SSH_PORT:-}"
+ALLOW_RUN_AS_ROOT="${ALLOW_RUN_AS_ROOT:-auto}"
 
 MPI_HOST_ARGS=()
 HOSTS_LABEL=""
@@ -28,6 +29,9 @@ fi
 
 # shellcheck disable=SC2206
 MPI_EXTRA=($MPI_EXTRA_ARGS)
+if [[ "$ALLOW_RUN_AS_ROOT" == "1" || ( "$ALLOW_RUN_AS_ROOT" == "auto" && "$(id -u)" == "0" ) ]]; then
+  MPI_EXTRA+=(--allow-run-as-root)
+fi
 if [[ -n "$MPI_PREFIX" ]]; then
   MPI_EXTRA+=(--prefix "$MPI_PREFIX")
 fi
@@ -53,6 +57,7 @@ echo \"[node] flexllmgen import ok\"
 echo "[setup] hosts: $HOSTS_LABEL"
 echo "[setup] remote FlexGen dir: $REMOTE_FLEXGEN_DIR"
 echo "[setup] MPI prefix: ${MPI_PREFIX:-default}"
+echo "[setup] allow run as root: $ALLOW_RUN_AS_ROOT"
 
 mpirun \
   "${MPI_HOST_ARGS[@]}" \

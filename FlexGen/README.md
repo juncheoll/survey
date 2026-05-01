@@ -94,7 +94,7 @@ Useful options:
 - `SSH_PORT=2222`: SSH port used by OpenMPI when every node uses the same non-default port.
 - `RUN_SETUP=0`: skip setup validation if the environment is already prepared.
 - `COMPRESS_WEIGHT_MODES=on`: run only the `--compress-weight` mode.
-- `MPI_EXTRA_ARGS=--allow-run-as-root`: useful when running OpenMPI as root inside Docker.
+- `ALLOW_RUN_AS_ROOT=auto`: automatically adds `--allow-run-as-root` when the script is run as root. Set `ALLOW_RUN_AS_ROOT=0` to disable this.
 
 If nodes use different SSH ports, define aliases in `~/.ssh/config` and use those aliases in `HOSTS` or the hostfile:
 

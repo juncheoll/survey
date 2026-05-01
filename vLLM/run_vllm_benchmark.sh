@@ -20,6 +20,8 @@ PIPELINE_PARALLEL_SIZE="${PIPELINE_PARALLEL_SIZE:-auto}"
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-auto}"
 GPUS_PER_NODE="${GPUS_PER_NODE:-1}"
 RUN_RAY_SETUP="${RUN_RAY_SETUP:-1}"
+STOP_RAY_ON_EXIT="${STOP_RAY_ON_EXIT:-0}"
+VLLM_DISTRIBUTED_EXECUTOR_BACKEND="${VLLM_DISTRIBUTED_EXECUTOR_BACKEND:-auto}"
 SERVER_START_TIMEOUT_SEC="${SERVER_START_TIMEOUT_SEC:-900}"
 NUM_PROMPTS="${NUM_PROMPTS:-64}"
 RANDOM_INPUT_LEN="${RANDOM_INPUT_LEN:-1024}"
@@ -28,6 +30,8 @@ REQUEST_RATE="${REQUEST_RATE:-inf}"
 MAX_CONCURRENCIES="${MAX_CONCURRENCIES:-1 2 4 8 16 32 64 128 256}"
 VLLM_EXTRA_SERVE_ARGS="${VLLM_EXTRA_SERVE_ARGS:-}"
 VLLM_EXTRA_BENCH_ARGS="${VLLM_EXTRA_BENCH_ARGS:-}"
+VLLM_ENFORCE_EAGER="${VLLM_ENFORCE_EAGER:-0}"
+VLLM_DISABLE_CUSTOM_ALL_REDUCE="${VLLM_DISABLE_CUSTOM_ALL_REDUCE:-0}"
 IGNORE_EOS="${IGNORE_EOS:-1}"
 
 if [[ -z "${LOG_DIR:-}" ]]; then
@@ -98,6 +102,14 @@ if [[ "$PARALLEL_WORLD_SIZE" -ne "$TOTAL_GPUS" ]]; then
   echo "Warning: TP x PP = $PARALLEL_WORLD_SIZE, but host slots total = $TOTAL_GPUS" >&2
 fi
 
+if [[ "$VLLM_DISTRIBUTED_EXECUTOR_BACKEND" == "auto" ]]; then
+  if [[ "${#HOST_NAMES[@]}" -gt 1 ]]; then
+    VLLM_DISTRIBUTED_EXECUTOR_BACKEND="ray"
+  else
+    VLLM_DISTRIBUTED_EXECUTOR_BACKEND=""
+  fi
+fi
+
 # shellcheck disable=SC2206
 CONCURRENCY_LIST=($MAX_CONCURRENCIES)
 if [[ "${#CONCURRENCY_LIST[@]}" -eq 0 ]]; then
@@ -118,6 +130,10 @@ cleanup() {
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
   fi
+  if [[ "$STOP_RAY_ON_EXIT" != "0" ]]; then
+    echo "[cleanup] stopping Ray"
+    ray stop --force >/dev/null 2>&1 || true
+  fi
   exit "$exit_code"
 }
 trap cleanup EXIT INT TERM
@@ -131,7 +147,7 @@ echo "[setup] running uv sync on head"
 uv sync
 source "$SCRIPT_DIR/.venv/bin/activate"
 
-if [[ "$RUN_RAY_SETUP" != "0" ]]; then
+if [[ "$RUN_RAY_SETUP" != "0" && "$VLLM_DISTRIBUTED_EXECUTOR_BACKEND" == "ray" ]]; then
   "$SCRIPT_DIR/run_vllm_ray_setup.sh"
 fi
 
@@ -146,8 +162,12 @@ fi
   echo "# tensor_parallel_size: $TENSOR_PARALLEL_SIZE"
   echo "# pipeline_parallel_size: $PIPELINE_PARALLEL_SIZE"
   echo "# parallel_world_size: $PARALLEL_WORLD_SIZE"
+  echo "# distributed_executor_backend: ${VLLM_DISTRIBUTED_EXECUTOR_BACKEND:-vllm_default}"
   echo "# max_model_len: $MAX_MODEL_LEN"
   echo "# max_num_seqs: ${MAX_NUM_SEQS:-vllm_default}"
+  echo "# gpu_memory_utilization: $GPU_MEMORY_UTILIZATION"
+  echo "# enforce_eager: $VLLM_ENFORCE_EAGER"
+  echo "# disable_custom_all_reduce: $VLLM_DISABLE_CUSTOM_ALL_REDUCE"
   echo "# random_input_len: $RANDOM_INPUT_LEN"
   echo "# random_output_len: $RANDOM_OUTPUT_LEN"
   echo "# num_prompts: $NUM_PROMPTS"
@@ -165,15 +185,26 @@ serve_cmd=(
   --served-model-name "$SERVED_MODEL_NAME"
   --tensor-parallel-size "$TENSOR_PARALLEL_SIZE"
   --pipeline-parallel-size "$PIPELINE_PARALLEL_SIZE"
-  --distributed-executor-backend ray
   --host "$SERVE_HOST"
   --port "$SERVE_PORT"
   --max-model-len "$MAX_MODEL_LEN"
   --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"
 )
 
+if [[ -n "$VLLM_DISTRIBUTED_EXECUTOR_BACKEND" ]]; then
+  serve_cmd+=(--distributed-executor-backend "$VLLM_DISTRIBUTED_EXECUTOR_BACKEND")
+fi
+
 if [[ -n "$MAX_NUM_SEQS" ]]; then
   serve_cmd+=(--max-num-seqs "$MAX_NUM_SEQS")
+fi
+
+if [[ "$VLLM_ENFORCE_EAGER" != "0" ]]; then
+  serve_cmd+=(--enforce-eager)
+fi
+
+if [[ "$VLLM_DISABLE_CUSTOM_ALL_REDUCE" != "0" ]]; then
+  serve_cmd+=(--disable-custom-all-reduce)
 fi
 
 serve_cmd+=("${SERVE_EXTRA[@]}")

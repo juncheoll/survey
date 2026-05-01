@@ -116,6 +116,8 @@ run_framework_gpu_count() {
           GPUS_PER_NODE="$gpu_count" \
           TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-$gpu_count}" \
           PIPELINE_PARALLEL_SIZE="${PIPELINE_PARALLEL_SIZE:-1}" \
+          RUN_RAY_SETUP="${RUN_RAY_SETUP:-0}" \
+          VLLM_DISTRIBUTED_EXECUTOR_BACKEND="${VLLM_DISTRIBUTED_EXECUTOR_BACKEND:-}" \
           HEAD_ADDRESS="$COMMON_HEAD_ADDRESS" \
           LOG_DIR="$framework_log_dir" \
           "$script_path"

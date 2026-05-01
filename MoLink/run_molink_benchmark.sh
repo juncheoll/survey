@@ -22,8 +22,10 @@ API_PORT="${API_PORT:-8080}"
 WORKER_API_PORT_BASE="${WORKER_API_PORT_BASE:-9095}"
 GRPC_PORT_BASE="${GRPC_PORT_BASE:-50061}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
+GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.90}"
 SERVER_START_TIMEOUT_SEC="${SERVER_START_TIMEOUT_SEC:-900}"
 SERVER_START_STAGGER_SEC="${SERVER_START_STAGGER_SEC:-5}"
+CLEANUP_EXISTING_SERVERS="${CLEANUP_EXISTING_SERVERS:-1}"
 
 NUM_PROMPTS="${NUM_PROMPTS:-64}"
 RANDOM_INPUT_LEN="${RANDOM_INPUT_LEN:-1024}"
@@ -214,6 +216,18 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+if [[ "$CLEANUP_EXISTING_SERVERS" != "0" ]]; then
+  echo "[cleanup] stopping existing MoLink API servers before launch"
+  for host in "${SETUP_HOSTS[@]}"; do
+    if [[ "$host" == "$HEAD_HOST" ]]; then
+      pkill -f "molinkv1.entrypoints.api_server" 2>/dev/null || true
+    else
+      run_remote "$host" "pkill -f molinkv1.entrypoints.api_server || true" >/dev/null 2>&1 || true
+    fi
+  done
+  sleep 2
+fi
+
 echo "[setup] working directory: $SCRIPT_DIR"
 echo "[setup] log directory: $RUN_LOG_DIR"
 echo "[setup] hosts: ${SETUP_HOSTS[*]}"
@@ -246,6 +260,7 @@ source "$SCRIPT_DIR/.venv/bin/activate"
   echo "# api_port: $API_PORT"
   echo "# grpc_port_base: $GRPC_PORT_BASE"
   echo "# max_model_len: $MAX_MODEL_LEN"
+  echo "# gpu_memory_utilization: $GPU_MEMORY_UTILIZATION"
   echo "# random_input_len: $RANDOM_INPUT_LEN"
   echo "# random_output_len: $RANDOM_OUTPUT_LEN"
   echo "# num_prompts: $NUM_PROMPTS"
@@ -284,6 +299,7 @@ for idx in "${!STAGE_HOSTS[@]}"; do
     --molink-end-layer "$end_layer"
     --port "$api_port"
     --max-model-len "$MAX_MODEL_LEN"
+    --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"
     "${SERVER_EXTRA[@]}"
   )
 

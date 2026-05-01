@@ -71,6 +71,8 @@ Useful overrides:
 - `SSH_PORT=2222`: use the same non-default SSH port for every worker.
 - `REMOTE_MOLINK_DIR=/workspace/MoLink`: path to this directory on every node.
 - `GPUS_PER_NODE=4`: when using `HOSTS` instead of `HOSTFILE`, expand each host into four GPU stages.
+- `GPU_MEMORY_UTILIZATION=0.75`: pass a lower `--gpu-memory-utilization` to each MoLink server.
+- `CLEANUP_EXISTING_SERVERS=0`: skip the pre-launch cleanup of existing MoLink API servers.
 - `MAX_CONCURRENCIES="16 32 64"`: sweep benchmark concurrency values.
 - `IGNORE_EOS=0`: omit `--ignore-eos` from `vllm bench serve`.
 - `MOLINK_EXTRA_SERVER_ARGS="..."`: append extra args to each MoLink server.

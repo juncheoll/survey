@@ -37,6 +37,7 @@ RUN_SETUP="${RUN_SETUP:-1}"
 MPI_EXTRA_ARGS="${MPI_EXTRA_ARGS:-}"
 MPI_PREFIX="${MPI_PREFIX:-}"
 SSH_PORT="${SSH_PORT:-}"
+ALLOW_RUN_AS_ROOT="${ALLOW_RUN_AS_ROOT:-auto}"
 
 if [[ -z "${LOG_DIR:-}" ]]; then
   if [[ -d "/logs" && -w "/logs" ]]; then
@@ -63,6 +64,9 @@ fi
 
 # shellcheck disable=SC2206
 MPI_EXTRA=($MPI_EXTRA_ARGS)
+if [[ "$ALLOW_RUN_AS_ROOT" == "1" || ( "$ALLOW_RUN_AS_ROOT" == "auto" && "$(id -u)" == "0" ) ]]; then
+  MPI_EXTRA+=(--allow-run-as-root)
+fi
 if [[ -n "$MPI_PREFIX" ]]; then
   MPI_EXTRA+=(--prefix "$MPI_PREFIX")
 fi
@@ -123,6 +127,7 @@ fi
   echo "# cores_per_gpu: $CORES_PER_GPU"
   echo "# mpi_prefix: ${MPI_PREFIX:-default}"
   echo "# ssh_port: ${SSH_PORT:-default}"
+  echo "# allow_run_as_root: $ALLOW_RUN_AS_ROOT"
   echo "# gpu_batch_sizes: ${BATCH_SIZES[*]}"
   echo "# compress_weight_modes: ${COMPRESS_MODES[*]}"
   echo "# compress_only_models: ${COMPRESS_ONLY_MODELS[*]}"
