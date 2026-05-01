@@ -624,6 +624,12 @@ def run_flexllmgen_dist(args):
     print("init model - done")
     cache_size = config.cache_bytes(num_prompts, prompt_len + gen_len)
     hidden_size = config.hidden_bytes(num_prompts, prompt_len + gen_len)
+    head_dim = config.input_dim // config.n_head
+    n_kv_head = getattr(config, "n_kv_head", config.n_head)
+    print(f"model config: layers={config.num_hidden_layers}, "
+          f"hidden={config.input_dim}, n_head={config.n_head}, "
+          f"n_kv_head={n_kv_head}, head_dim={head_dim}, "
+          f"batch={num_prompts}, seq_len={prompt_len + gen_len}")
     print(f"model size: {config.model_bytes()/GB:.3f} GB, "
           f"cache size: {cache_size/GB:.3f} GB, "
           f"hidden size (prefill): {hidden_size/GB:.3f} GB")

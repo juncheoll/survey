@@ -2021,6 +2021,12 @@ def run_flexllmgen(args):
     model_config = get_model_config(args.model, pad_token_id=tokenizer.pad_token_id)
     cache_size = model_config.cache_bytes(num_prompts, prompt_len + gen_len)
     hidden_size = model_config.hidden_bytes(num_prompts, prompt_len + gen_len)
+    head_dim = model_config.input_dim // model_config.n_head
+    n_kv_head = getattr(model_config, "n_kv_head", model_config.n_head)
+    print(f"model config: layers={model_config.num_hidden_layers}, "
+          f"hidden={model_config.input_dim}, n_head={model_config.n_head}, "
+          f"n_kv_head={n_kv_head}, head_dim={head_dim}, "
+          f"batch={num_prompts}, seq_len={prompt_len + gen_len}")
     print(f"model size: {model_config.model_bytes()/GB:.3f} GB, "
           f"cache size: {cache_size/GB:.3f} GB, "
           f"hidden size (prefill): {hidden_size/GB:.3f} GB")
