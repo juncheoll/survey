@@ -193,6 +193,7 @@ def worker_func(global_rank, world_size, worker_pipe, device):
                 "this_num_candidate_tokens": model.this_num_candidate_tokens,
                 "this_assistant_runtime": model.this_assistant_runtime,
                 "this_ttft": getattr(model, "this_ttft", 0.0),
+                "this_acceptance_steps": getattr(model, "this_acceptance_steps", []),
                 "num_accepted_tokens": model.num_accepted_tokens,
                 "num_candidate_tokens": model.num_candidate_tokens,
                 "assistant_runtime": model.assistant_runtime,

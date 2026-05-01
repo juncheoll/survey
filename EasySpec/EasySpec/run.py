@@ -256,6 +256,7 @@ def main():
     ignore_eos = _env_bool("EASYSPEC_IGNORE_EOS", False)
     prompt_index = _env_int("EASYSPEC_PROMPT_INDEX", 0)
     allow_prompt_concat = _env_bool("EASYSPEC_ALLOW_PROMPT_CONCAT", False)
+    log_acceptance_steps = _env_bool("EASYSPEC_LOG_ACCEPTANCE_STEPS", True)
     default_datasets = ["specexec_prompt"] if use_specexec_prompt else ['mmlu', 'humaneval', 'math', 'ifeval_strict', 'mgsm']
     datasets = _env_list("EASYSPEC_DATASETS", default_datasets)
     tree_hyper_params = [(
@@ -433,6 +434,7 @@ def main():
                 total_gen_length = 0
                 total_ttft = 0.0
                 ttft_count = 0
+                all_acceptance_steps = []
                 for i,prompt in enumerate(prompts):
                     if i < test_start:
                         continue                    
@@ -462,6 +464,8 @@ def main():
                     this_num_candidate_tokens = res_dict["this_num_candidate_tokens"]
                     this_assistant_runtime = res_dict["this_assistant_runtime"]
                     this_ttft = res_dict.get("this_ttft", 0.0)
+                    this_acceptance_steps = res_dict.get("this_acceptance_steps", [])
+                    all_acceptance_steps.extend(this_acceptance_steps)
                     if this_ttft > 0:
                         total_ttft += this_ttft
                         ttft_count += 1
@@ -480,6 +484,8 @@ def main():
                     # record statistics
                     print_and_record(fd, f"generated length: {this_gen_length}, total length: {total_gen_length}")
                     print_and_record(fd, f"this ttft: {this_ttft}")
+                    if log_acceptance_steps:
+                        print_and_record(fd, f"this acceptance steps: {this_acceptance_steps}")
                     print_and_record(fd, f"this token/s ****: {this_gen_length / this_run_time}")
                     print_and_record(fd, f"this accept: {this_num_accepted_tokens}/{this_num_candidate_tokens}={this_num_accepted_tokens / (this_num_candidate_tokens + 1e-5)}")
                     print_and_record(fd, f"full accept: {num_accepted_tokens}/{num_candidate_tokens}={num_accepted_tokens / (num_candidate_tokens + 1e-5)}")
@@ -510,6 +516,11 @@ def main():
                 print_and_record(fd, f"tokens per second: {sum_generation_tokens/exact_run_time}")
                 print_and_record(fd, f"ttft: {total_ttft / max(ttft_count, 1)}")
                 print_and_record(fd, f"tpot: {exact_run_time / (sum_generation_tokens + 1e-5)}")
+                if all_acceptance_steps:
+                    avg_acceptance_length = sum(step[0] for step in all_acceptance_steps) / len(all_acceptance_steps)
+                else:
+                    avg_acceptance_length = 0.0
+                print_and_record(fd, f"avg_acceptance_length_per_step: {avg_acceptance_length}")
                 print_and_record(fd, f"accept_rate: {accept_num}/{candidate_num} = {accept_num / (candidate_num+1e-5)}")
                 
                 if fd is not None:

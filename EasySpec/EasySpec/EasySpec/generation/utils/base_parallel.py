@@ -18,6 +18,7 @@ from typing import List, Optional, Tuple, Union, Dict, Any
 import inspect
 import warnings
 import copy
+import os
 
 from transformers.generation.utils import GenerationMixin
 
@@ -86,6 +87,7 @@ class BaseParallelGenerationMixin(GenerationMixin):
         self.this_assistant_runtime = 0.0
         self.this_num_accepted_tokens = 0
         self.this_num_candidate_tokens = 0
+        self.this_acceptance_steps = []
     
     def prepare_for_assistant(self, assistant_model):
         self.init_statistics()
@@ -97,6 +99,20 @@ class BaseParallelGenerationMixin(GenerationMixin):
     def _record_first_token_time(self):
         if self.this_ttft == 0.0 and self._generation_start_time != 0.0:
             self.this_ttft = record_time_sync() - self._generation_start_time
+
+    def _record_acceptance_step(self, accepted_tokens, candidate_tokens, flat_candidate_tokens=None):
+        accepted = accepted_tokens.item() if isinstance(accepted_tokens, torch.Tensor) else int(accepted_tokens)
+        candidate = candidate_tokens.item() if isinstance(candidate_tokens, torch.Tensor) else int(candidate_tokens)
+        if flat_candidate_tokens is None:
+            flat_candidate = candidate
+        else:
+            flat_candidate = flat_candidate_tokens.item() if isinstance(flat_candidate_tokens, torch.Tensor) else int(flat_candidate_tokens)
+        self.this_acceptance_steps.append((accepted, candidate, flat_candidate))
+        if os.environ.get("EASYSPEC_LOG_ACCEPTANCE_STEPS", "1").lower() in {"1", "true", "yes", "y", "on"}:
+            rank0_print(
+                f"acceptance_step: step={len(self.this_acceptance_steps)} "
+                f"accepted={accepted} candidate_depth={candidate} flat_candidate_tokens={flat_candidate}"
+            )
             
     
     def _prepare_generation_config(
@@ -580,6 +596,7 @@ class BaseParallelGenerationMixin(GenerationMixin):
                     
                     self.this_num_accepted_tokens += n_matches
                     self.this_num_candidate_tokens += candidate_length
+                    self._record_acceptance_step(n_matches, candidate_length)
                     # rank0_print(f"accept: {n_matches}/{candidate_length} {self.this_num_accepted_tokens}/{self.this_num_candidate_tokens}")
                 else:
                     next_token_logits = None
@@ -912,6 +929,7 @@ class BaseParallelGenerationMixin(GenerationMixin):
                     # print(f"sample need: {sample_end - sample_start}")
                     self.this_num_accepted_tokens += n_matches
                     self.this_num_candidate_tokens += candidate_length
+                    self._record_acceptance_step(n_matches, candidate_length, flat_candidate_length)
                     # rank0_print(f"accept: {n_matches}/{candidate_length} {self.this_num_accepted_tokens}/{self.this_num_candidate_tokens}")
                 else:
                     next_token_logits = None
