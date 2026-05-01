@@ -30,7 +30,7 @@ COMPRESS_WEIGHT_MODES="${COMPRESS_WEIGHT_MODES:-off on}"
 NUM_GPU_BATCHES="${NUM_GPU_BATCHES:-1}"
 PROMPT_LEN="${PROMPT_LEN:-1024}"
 GEN_LEN="${GEN_LEN:-256}"
-PERCENT_ARGS="${PERCENT_ARGS:-80 20 80 20 80 20}"
+PERCENT_ARGS="${PERCENT_ARGS:-80 20 80 20 100 0}"
 GPUS_PER_NODE="${GPUS_PER_NODE:-1}"
 CORES_PER_GPU="${CORES_PER_GPU:-4}"
 RUN_SETUP="${RUN_SETUP:-1}"
@@ -78,6 +78,16 @@ fi
 PERCENT=($PERCENT_ARGS)
 if [[ "${#PERCENT[@]}" -ne 6 ]]; then
   echo "PERCENT_ARGS must contain exactly 6 numbers. Got: $PERCENT_ARGS" >&2
+  exit 2
+fi
+
+ACT_GPU_PERCENT="${PERCENT[4]}"
+ACT_CPU_PERCENT="${PERCENT[5]}"
+ACT_DISK_PERCENT=$((100 - ACT_GPU_PERCENT - ACT_CPU_PERCENT))
+if [[ "$ACT_GPU_PERCENT" != "100" && "$ACT_CPU_PERCENT" != "100" && "$ACT_DISK_PERCENT" != "100" ]]; then
+  echo "Distributed FlexGen requires activations to live entirely on one device." >&2
+  echo "Set the last two PERCENT_ARGS values to one of: '100 0' for GPU, '0 100' for CPU, or '0 0' for disk." >&2
+  echo "Got PERCENT_ARGS=$PERCENT_ARGS, so activation placement is gpu=$ACT_GPU_PERCENT cpu=$ACT_CPU_PERCENT disk=$ACT_DISK_PERCENT." >&2
   exit 2
 fi
 

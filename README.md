@@ -94,4 +94,5 @@ The wrapper writes `summary.tsv` and per-framework stdout logs under `logs/multi
 
 GPU_COUNTS="8" \
 NUM_PROMPTS_PER_CONCURRENCY=1 \
+VLLM_ENFORCE_EAGER=1 \
 ./run_single_node_multi_gpu_benchmarks.sh
