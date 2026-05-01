@@ -1,0 +1,18 @@
+[project]
+name = "easyspec-env"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "accelerate==1.2.1",
+    "datasets==3.2.0",
+    "pandas>=3.0.2",
+    "psutil>=7.2.2",
+    "pyarrow>=24.0.0",
+    "safetensors>=0.7.0",
+    "sentencepiece>=0.2.1",
+    "torch==2.5.1",
+    "tqdm>=4.67.3",
+    "transformers==4.45.0",
+]

@@ -1,0 +1,67 @@
+{
+    "prefix": "./datasets",
+    "mmlu": {
+        "directory": "Llama-3.3-70B-Instruct-evals",
+        "name": "Llama-3.3-70B-Instruct-evals__mmlu__0_shot__cot__details",
+        "split": "latest"
+    },
+    "humaneval": {
+        "directory": "Llama-3.3-70B-Instruct-evals",
+        "name": "Llama-3.3-70B-Instruct-evals__human_eval__details",
+        "split": "latest"
+    },
+    "math": {
+        "directory": "Llama-3.3-70B-Instruct-evals",
+        "name": "Llama-3.3-70B-Instruct-evals__math__details",
+        "split": "latest"
+    },
+    "ifeval_strict": {
+        "directory": "Llama-3.3-70B-Instruct-evals",
+        "name": "Llama-3.3-70B-Instruct-evals__ifeval__strict__details",
+        "split": "latest"
+    },
+    "mgsm": {
+        "directory": "Llama-3.3-70B-Instruct-evals",
+        "name": "Llama-3.3-70B-Instruct-evals__mgsm__details",
+        "split": "latest"
+    },
+    "math_hard": {
+        "directory": "Llama-3.3-70B-Instruct-evals",
+        "name": "Llama-3.3-70B-Instruct-evals__math_hard__details",
+        "split": "latest"
+    },
+    "mbpp": {
+        "directory": "Llama-3.3-70B-Instruct-evals",
+        "name": "Llama-3.3-70B-Instruct-evals__mbpp_plus__details",
+        "split": "latest"
+    },
+    "translation": {
+        "directory": "specbench",
+        "name": "question.jsonl",
+        "category": "translation"
+    },
+    "summarization": {
+        "directory": "specbench",
+        "name": "question.jsonl",
+        "category": "summarization"
+    },
+    "qa": {
+        "directory": "specbench",
+        "name": "question.jsonl",
+        "category": "qa"
+    },
+    "math_reasoning": {
+        "directory": "specbench",
+        "name": "question.jsonl",
+        "category": "math_reasoning"
+    },
+    "rag": {
+        "directory": "specbench",
+        "name": "question.jsonl",
+        "category": "rag"
+    },
+    "mt_bench": {
+        "directory": "specbench",
+        "name": "question.jsonl"
+    }
+}
