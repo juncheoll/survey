@@ -500,11 +500,15 @@ for idx in "${!STAGE_HOSTS[@]}"; do
     (
       cd "$REMOTE_MOLINK_DIR"
       export CUDA_VISIBLE_DEVICES="$gpu_id"
+      set +e
       "${server_cmd[@]}"
+      server_exit_code=$?
+      echo "[server] stage=$idx host=$host gpu=$gpu_id api_server exited with code $server_exit_code"
+      exit "$server_exit_code"
     ) >> "$server_log" 2>&1 &
   else
     remote_dir="$(remote_quote "$REMOTE_MOLINK_DIR")"
-    remote_command="cd $remote_dir && CUDA_VISIBLE_DEVICES=$(remote_quote "$gpu_id") $(printf "%q " "${server_cmd[@]}")"
+    remote_command="cd $remote_dir && CUDA_VISIBLE_DEVICES=$(remote_quote "$gpu_id") $(printf "%q " "${server_cmd[@]}"); server_exit_code=\$?; echo '[server] stage=$idx host=$host gpu=$gpu_id api_server exited with code' \$server_exit_code; exit \$server_exit_code"
     ssh "${SSH_ARGS[@]}" "$host" "bash -lc $(remote_quote "$remote_command")" >> "$server_log" 2>&1 &
   fi
   SERVER_PIDS+=("$!")
