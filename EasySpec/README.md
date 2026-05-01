@@ -12,4 +12,15 @@ EASYSPEC_IGNORE_EOS=1 \
 EASYSPEC_DO_SAMPLE=false \
 .venv/bin/python EasySpec/run.py
 
+EASYSPEC_ASSISTANT_MODEL=meta-llama/Llama-2-7b-chat-hf \
+EASYSPEC_BASE_MODEL=meta-llama/Llama-2-70b-chat-hf \
+EASYSPEC_CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+EASYSPEC_WORLD_SIZE=8 \
+EASYSPEC_TEST_INPUT_TOKENS=1024 \
+EASYSPEC_NUM_NEW_TOKENS=256 \
+EASYSPEC_IGNORE_EOS=1 \
+EASYSPEC_DO_SAMPLE=false \
+.venv/bin/python EasySpec/run.py
+
+
 ```
