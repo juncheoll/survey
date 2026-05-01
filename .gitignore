@@ -13,6 +13,9 @@ wheels/
 logs/
 *.log
 
+# PowerInfer
+PowerInfer/models/
+
 # Local PRIMA dependencies, models, and build artifacts
 prima/HiGHS/
 prima/download/

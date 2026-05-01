@@ -29,7 +29,7 @@ sudo apt install -y openmpi-bin libopenmpi-dev
 ```
 
 ### single-node benchmark automation
-Runs the single-node benchmark scripts for FlexGen, ZeRO-Inference, and SubSpec in sequence.
+Runs the single-node benchmark scripts for FlexGen, ZeRO-Inference, and SubSpec in sequence. PowerInfer is also supported, but is not included by default because it may download large GGUF model repos.
 
 ```
 ./run_single_node_benchmarks.sh
@@ -37,6 +37,7 @@ Runs the single-node benchmark scripts for FlexGen, ZeRO-Inference, and SubSpec 
 
 Useful overrides:
 - `FRAMEWORKS="FlexGen SubSpec"`: select frameworks.
+- `FRAMEWORKS="PowerInfer"`: run only PowerInfer.
 - `STOP_ON_FAILURE=1`: stop after the first failed framework.
 - `LOG_DIR=/path/to/logs`: change orchestration log location.
 
@@ -91,8 +92,16 @@ The wrapper writes `summary.tsv` and per-framework stdout logs under `logs/multi
 
 
 
+### single-single
+```
+VRAM_LIMITS="16" ./run_single_node_benchmarks.sh
+FRAMEWORKS="PowerInfer" ./run_single_node_benchmarks.sh
+```
 
+### single-multi
+```
 GPU_COUNTS="8" \
 NUM_PROMPTS_PER_CONCURRENCY=1 \
 VLLM_ENFORCE_EAGER=1 \
 ./run_single_node_multi_gpu_benchmarks.sh
+```

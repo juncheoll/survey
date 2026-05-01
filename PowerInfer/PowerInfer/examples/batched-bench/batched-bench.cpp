@@ -43,8 +43,8 @@ int main(int argc, char ** argv) {
     float vram_budget_gb = -1.0f;
     int mmq          = 0;
 
-    std::vector<int> n_pp = { 512};
-    std::vector<int> n_tg = { 32};
+    std::vector<int> n_pp = { 1024};
+    std::vector<int> n_tg = { 256};
     std::vector<int> n_pl = { 1, 2, 4, 8, 16, 32, 64, 128};
     //std::vector<int> n_pl = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 32, };
 

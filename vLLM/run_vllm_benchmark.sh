@@ -28,7 +28,7 @@ NUM_PROMPTS_PER_CONCURRENCY="${NUM_PROMPTS_PER_CONCURRENCY:-0}"
 RANDOM_INPUT_LEN="${RANDOM_INPUT_LEN:-1024}"
 RANDOM_OUTPUT_LEN="${RANDOM_OUTPUT_LEN:-256}"
 REQUEST_RATE="${REQUEST_RATE:-inf}"
-MAX_CONCURRENCIES="${MAX_CONCURRENCIES:-1 2 4 8 16 32 64 128 256}"
+MAX_CONCURRENCIES="${MAX_CONCURRENCIES:-32 64 128 256}"
 VLLM_EXTRA_SERVE_ARGS="${VLLM_EXTRA_SERVE_ARGS:-}"
 VLLM_EXTRA_BENCH_ARGS="${VLLM_EXTRA_BENCH_ARGS:-}"
 VLLM_ENFORCE_EAGER="${VLLM_ENFORCE_EAGER:-0}"
@@ -127,6 +127,13 @@ mkdir -p "$RUN_LOG_DIR"
 
 cleanup() {
   local exit_code=$?
+  if [[ -n "${SERVER_PGID:-}" ]]; then
+    echo "[cleanup] stopping vLLM server process group pgid=$SERVER_PGID"
+    kill -TERM "-$SERVER_PGID" 2>/dev/null || true
+    sleep 2
+    kill -KILL "-$SERVER_PGID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+  fi
   if [[ -n "${SERVER_PID:-}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
     echo "[cleanup] stopping vLLM server pid=$SERVER_PID"
     kill "$SERVER_PID" 2>/dev/null || true
@@ -220,9 +227,15 @@ echo "[serve] starting vLLM server"
   printf " %q" "${serve_cmd[@]}"
   echo
   echo
-  "${serve_cmd[@]}"
-} > "$SERVER_LOG" 2>&1 &
-SERVER_PID=$!
+} > "$SERVER_LOG"
+if command -v setsid >/dev/null 2>&1; then
+  setsid "${serve_cmd[@]}" >> "$SERVER_LOG" 2>&1 &
+  SERVER_PID=$!
+  SERVER_PGID="$SERVER_PID"
+else
+  "${serve_cmd[@]}" >> "$SERVER_LOG" 2>&1 &
+  SERVER_PID=$!
+fi
 
 echo "[serve] waiting for http://$BENCH_HOST:$SERVE_PORT/v1/models"
 deadline=$((SECONDS + SERVER_START_TIMEOUT_SEC))

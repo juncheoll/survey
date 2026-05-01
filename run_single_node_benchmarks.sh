@@ -57,6 +57,11 @@ run_framework() {
       script_path="$SCRIPT_DIR/SubSpec/run_subspec_benchmark.sh"
       framework_log_dir="$RUN_LOG_DIR/SubSpec"
       ;;
+    PowerInfer|powerinfer)
+      framework="PowerInfer"
+      script_path="$SCRIPT_DIR/PowerInfer/run_powerinfer_benchmark.sh"
+      framework_log_dir="$RUN_LOG_DIR/PowerInfer"
+      ;;
     *)
       echo "[skip] unknown framework: $framework" >&2
       return 2
