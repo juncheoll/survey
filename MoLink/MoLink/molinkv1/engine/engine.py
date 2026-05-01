@@ -1,5 +1,4 @@
 from dataclasses import asdict, fields
-from vllm.v1.engine.async_llm import AsyncLLM
 from vllm.logger import init_logger
 from vllm.usage.usage_lib import UsageContext
 from vllm.v1.metrics.loggers import StatLoggerFactory
@@ -7,11 +6,12 @@ from molinkv1.executor import MolinkExecutor
 from molinkv1.config import MolinkSchedulerConfig
 from molinkv1.config import MolinkConfig, VllmConfig1
 from molinkv1.arg_utils import MolinkEngineArgs
+from molinkv1.engine.engine_initialization_wrapper import EngineInitializationWrapper
 
 logger = init_logger(__name__)
 
 
-class MolinkEngine(AsyncLLM):
+class MolinkEngine(EngineInitializationWrapper):
 
     def __init__(self, *args, **kwargs) -> None:
         config = kwargs.get("vllm_config")
