@@ -7,7 +7,8 @@ python -m molinkv1.entrypoints.api_server \
     --molink-start-layer 0 \
     --molink-end-layer 16 \
     --port 8080 \
-    --max-model-len 4096
+    --max-model-len 2048 \
+    --enforce-eager
 
 
 
@@ -18,7 +19,8 @@ python -m molinkv1.entrypoints.api_server \
     --molink-start-layer 16 \
     --molink-end-layer -1 \
     --port 9095 \
-    --max-model-len 4096 \
+    --max-model-len 2048 \
+    --enforce-eager \
     --molink-initial-peer 192.168.79.9:50061
 ```
 
@@ -60,7 +62,8 @@ For four nodes, the split is:
 Defaults:
 - `MODEL=meta-llama/Llama-2-70b-hf`
 - `MODEL_LAYERS=80`
-- `MAX_MODEL_LEN=4096`
+- `MAX_MODEL_LEN=2048`
+- `MOLINK_ENFORCE_EAGER=1`
 - `RANDOM_INPUT_LEN=1024`
 - `RANDOM_OUTPUT_LEN=256`
 - `NUM_PROMPTS=64`
@@ -75,6 +78,8 @@ Useful overrides:
 - `REMOTE_MOLINK_DIR=/workspace/MoLink`: path to this directory on every node.
 - `GPUS_PER_NODE=4`: when using `HOSTS` instead of `HOSTFILE`, expand each host into four GPU stages.
 - `GPU_MEMORY_UTILIZATION=0.75`: pass a lower `--gpu-memory-utilization` to each MoLink server.
+- `MAX_MODEL_LEN=4096`: increase the server-side context length if needed.
+- `MOLINK_ENFORCE_EAGER=0`: omit `--enforce-eager` from each MoLink server.
 - `CLEANUP_EXISTING_SERVERS=0`: skip the pre-launch cleanup of existing MoLink API servers.
 - `RANDOM_OUTPUT_LEN=256`: number of generated tokens per request.
 - `NUM_PROMPTS=64`: total requests per `MAX_CONCURRENCIES` run.

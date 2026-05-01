@@ -21,8 +21,9 @@ HEAD_ADDRESS="${HEAD_ADDRESS:-$(hostname -i | awk '{print $1}')}"
 API_PORT="${API_PORT:-8080}"
 WORKER_API_PORT_BASE="${WORKER_API_PORT_BASE:-9095}"
 GRPC_PORT_BASE="${GRPC_PORT_BASE:-50061}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-2048}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.90}"
+MOLINK_ENFORCE_EAGER="${MOLINK_ENFORCE_EAGER:-1}"
 SERVER_START_TIMEOUT_SEC="${SERVER_START_TIMEOUT_SEC:-900}"
 SERVER_START_STAGGER_SEC="${SERVER_START_STAGGER_SEC:-5}"
 CLEANUP_EXISTING_SERVERS="${CLEANUP_EXISTING_SERVERS:-1}"
@@ -262,6 +263,7 @@ source "$SCRIPT_DIR/.venv/bin/activate"
   echo "# grpc_port_base: $GRPC_PORT_BASE"
   echo "# max_model_len: $MAX_MODEL_LEN"
   echo "# gpu_memory_utilization: $GPU_MEMORY_UTILIZATION"
+  echo "# enforce_eager: $MOLINK_ENFORCE_EAGER"
   echo "# random_input_len: $RANDOM_INPUT_LEN"
   echo "# random_output_len: $RANDOM_OUTPUT_LEN"
   echo "# num_prompts: $NUM_PROMPTS"
@@ -304,6 +306,10 @@ for idx in "${!STAGE_HOSTS[@]}"; do
     --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"
     "${SERVER_EXTRA[@]}"
   )
+
+  if [[ "$MOLINK_ENFORCE_EAGER" != "0" ]]; then
+    server_cmd+=(--enforce-eager)
+  fi
 
   if [[ "$idx" -gt 0 ]]; then
     server_cmd+=(--molink-initial-peer "$HEAD_PEER")
