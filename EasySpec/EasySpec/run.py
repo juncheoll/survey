@@ -72,6 +72,29 @@ def _make_length_controlled_prompt(text, tokenizer, target_tokens):
     return tokenizer.decode(controlled_ids, skip_special_tokens=False)
 
 
+def _make_length_controlled_dataset_prompt(prompts, tokenizer, target_tokens, prompt_index):
+    prompts = list(prompts)
+    if not prompts:
+        raise ValueError("Cannot build prompt from an empty dataset")
+    if prompt_index < 0 or prompt_index >= len(prompts):
+        raise ValueError(f"EASYSPEC_PROMPT_INDEX={prompt_index} is out of range for {len(prompts)} prompts")
+    if target_tokens is None or target_tokens <= 0:
+        return prompts[prompt_index]
+
+    pieces = []
+    token_count = 0
+    cursor = prompt_index
+    while token_count < target_tokens:
+        pieces.append(prompts[cursor % len(prompts)])
+        text = "\n\n".join(pieces)
+        token_count = len(tokenizer.encode(text, add_special_tokens=False))
+        cursor += 1
+        if cursor - prompt_index > len(prompts) * 2 and token_count == 0:
+            raise ValueError("Cannot build length-controlled prompt from empty dataset prompts")
+
+    return _make_length_controlled_prompt("\n\n".join(pieces), tokenizer, target_tokens)
+
+
 def _default_specexec_prompts_file():
     return str(
         Path(__file__).resolve().parents[2]
@@ -194,6 +217,7 @@ def main():
     prompts_file = os.environ.get("EASYSPEC_PROMPTS_FILE", _default_specexec_prompts_file())
     use_specexec_prompt = _env_bool("EASYSPEC_USE_SPECEXEC_PROMPT", test_input_tokens > 0 or test_input_text is not None)
     ignore_eos = _env_bool("EASYSPEC_IGNORE_EOS", False)
+    prompt_index = _env_int("EASYSPEC_PROMPT_INDEX", 0)
     default_datasets = ["specexec_prompt"] if use_specexec_prompt else ['mmlu', 'humaneval', 'math', 'ifeval_strict', 'mgsm']
     datasets = _env_list("EASYSPEC_DATASETS", default_datasets)
     tree_hyper_params = [(
@@ -309,6 +333,11 @@ def main():
                     test_end = 1
                 else:
                     prompts = get_prompts_from_name(dataset_name, use_generator=False, tokenizer=tokenizer, tokenizer_kwargs=tokenizer_kwargs)
+                    if test_input_tokens > 0:
+                        prompt = _make_length_controlled_dataset_prompt(prompts, tokenizer, test_input_tokens, prompt_index)
+                        prompts = [prompt]
+                        test_start = 0
+                        test_end = 1
                 model = DistributedInferenceEngine.from_pretrained(
                     model_dir, 
                     **from_pretrained_kwargs
