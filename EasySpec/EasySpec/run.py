@@ -180,12 +180,13 @@ def main():
     layer_parallel_policy = LayerParallelPolicy.ATTN_ONLY
 
     
-    datasets = _env_list("EASYSPEC_DATASETS", ['mmlu', 'humaneval', 'math', 'ifeval_strict', 'mgsm'])
     test_input_tokens = _env_int("EASYSPEC_TEST_INPUT_TOKENS", 0)
     test_input_text = os.environ.get("EASYSPEC_TEST_INPUT_TEXT")
     prompts_file = os.environ.get("EASYSPEC_PROMPTS_FILE", _default_specexec_prompts_file())
     use_specexec_prompt = _env_bool("EASYSPEC_USE_SPECEXEC_PROMPT", test_input_tokens > 0 or test_input_text is not None)
     ignore_eos = _env_bool("EASYSPEC_IGNORE_EOS", False)
+    default_datasets = ["specexec_prompt"] if use_specexec_prompt else ['mmlu', 'humaneval', 'math', 'ifeval_strict', 'mgsm']
+    datasets = _env_list("EASYSPEC_DATASETS", default_datasets)
     tree_hyper_params = [(
         _env_int("EASYSPEC_TREE_DEPTH", 5),
         _env_int("EASYSPEC_TOP_K", 12),
