@@ -6,5 +6,5 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "ray[default]>=2.55.1",
-    "vllm>=0.20.0",
+    "vllm==0.10.0",
 ]
