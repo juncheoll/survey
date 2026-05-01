@@ -42,18 +42,41 @@ if [[ -z "${LOG_DIR:-}" ]]; then
   fi
 fi
 
-HOST_NAMES=()
-HOST_SLOTS=()
+SETUP_HOSTS=()
+STAGE_HOSTS=()
+STAGE_GPU_IDS=()
+STAGE_LABELS=()
+
+has_setup_host() {
+  local candidate="$1"
+  local existing
+  for existing in "${SETUP_HOSTS[@]:-}"; do
+    if [[ "$existing" == "$candidate" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
 add_host() {
   local host="$1"
   local slots="$2"
-  if [[ "$slots" != "1" ]]; then
-    echo "MoLink benchmark expects single-GPU nodes. Host $host has slots=$slots." >&2
+  local gpu
+
+  if ! [[ "$slots" =~ ^[0-9]+$ ]] || [[ "$slots" -lt 1 ]]; then
+    echo "MoLink host slots must be a positive integer. Host $host has slots=$slots." >&2
     exit 2
   fi
-  HOST_NAMES+=("$host")
-  HOST_SLOTS+=("$slots")
+
+  if ! has_setup_host "$host"; then
+    SETUP_HOSTS+=("$host")
+  fi
+
+  for ((gpu = 0; gpu < slots; gpu++)); do
+    STAGE_HOSTS+=("$host")
+    STAGE_GPU_IDS+=("$gpu")
+    STAGE_LABELS+=("${host}:gpu${gpu}")
+  done
 }
 
 parse_hostfile() {
@@ -83,11 +106,13 @@ else
   add_host "127.0.0.1" "$GPUS_PER_NODE"
 fi
 
-NUM_STAGES="${#HOST_NAMES[@]}"
+NUM_STAGES="${#STAGE_HOSTS[@]}"
 if [[ "$NUM_STAGES" -eq 0 ]]; then
   echo "No hosts found. Set HOSTFILE or HOSTS." >&2
   exit 2
 fi
+
+HEAD_HOST="${HEAD_HOST:-${STAGE_HOSTS[0]}}"
 
 if [[ "$MODEL_LAYERS" -lt "$NUM_STAGES" ]]; then
   echo "MODEL_LAYERS=$MODEL_LAYERS is smaller than number of stages=$NUM_STAGES." >&2
@@ -171,15 +196,15 @@ SERVER_PIDS=()
 
 cleanup() {
   local exit_code=$?
+  local host
   for pid in "${SERVER_PIDS[@]:-}"; do
     if kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
       wait "$pid" 2>/dev/null || true
     fi
   done
-  for idx in "${!HOST_NAMES[@]}"; do
-    host="${HOST_NAMES[$idx]}"
-    if [[ "$idx" -eq 0 ]]; then
+  for host in "${SETUP_HOSTS[@]}"; do
+    if [[ "$host" == "$HEAD_HOST" ]]; then
       pkill -f "molinkv1.entrypoints.api_server" 2>/dev/null || true
     else
       run_remote "$host" "pkill -f molinkv1.entrypoints.api_server || true" >/dev/null 2>&1 || true
@@ -191,14 +216,14 @@ trap cleanup EXIT INT TERM
 
 echo "[setup] working directory: $SCRIPT_DIR"
 echo "[setup] log directory: $RUN_LOG_DIR"
-echo "[setup] hosts: ${HOST_NAMES[*]}"
+echo "[setup] hosts: ${SETUP_HOSTS[*]}"
+echo "[setup] stage placement: ${STAGE_LABELS[*]}"
 echo "[setup] stages: $NUM_STAGES"
 echo "[setup] model layers: $MODEL_LAYERS"
 
-for idx in "${!HOST_NAMES[@]}"; do
-  host="${HOST_NAMES[$idx]}"
+for host in "${SETUP_HOSTS[@]}"; do
   echo "[setup] preparing node: $host"
-  if [[ "$idx" -eq 0 ]]; then
+  if [[ "$host" == "$HEAD_HOST" ]]; then
     bash -lc "$(remote_setup_cmd)"
   else
     run_remote "$host" "$(remote_setup_cmd)"
@@ -213,8 +238,10 @@ source "$SCRIPT_DIR/.venv/bin/activate"
   echo "# started_at: $(date -Iseconds)"
   echo "# model: $MODEL"
   echo "# model_layers: $MODEL_LAYERS"
-  echo "# hosts: ${HOST_NAMES[*]}"
+  echo "# hosts: ${SETUP_HOSTS[*]}"
+  echo "# stage_placement: ${STAGE_LABELS[*]}"
   echo "# stages: $NUM_STAGES"
+  echo "# head_host: $HEAD_HOST"
   echo "# head_address: $HEAD_ADDRESS"
   echo "# api_port: $API_PORT"
   echo "# grpc_port_base: $GRPC_PORT_BASE"
@@ -236,13 +263,16 @@ HEAD_GRPC_PORT="$(grpc_port_for_stage 0)"
 HEAD_PEER="$HEAD_ADDRESS:$HEAD_GRPC_PORT"
 SERVER_LOGS=()
 
-for idx in "${!HOST_NAMES[@]}"; do
-  host="${HOST_NAMES[$idx]}"
+for idx in "${!STAGE_HOSTS[@]}"; do
+  host="${STAGE_HOSTS[$idx]}"
+  gpu_id="${STAGE_GPU_IDS[$idx]}"
+  stage_label="${STAGE_LABELS[$idx]}"
   start_layer="$(layer_start_for_stage "$idx")"
   end_layer="$(layer_end_for_stage "$idx")"
   api_port="$(api_port_for_stage "$idx")"
   grpc_port="$(grpc_port_for_stage "$idx")"
-  server_log="$RUN_LOG_DIR/server_stage_${idx}_${host}.stdout.log"
+  safe_stage_label="${stage_label//[^A-Za-z0-9_.-]/_}"
+  server_log="$RUN_LOG_DIR/server_stage_${idx}_${safe_stage_label}.stdout.log"
   SERVER_LOGS+=("$server_log")
 
   server_cmd=(
@@ -261,24 +291,27 @@ for idx in "${!HOST_NAMES[@]}"; do
     server_cmd+=(--molink-initial-peer "$HEAD_PEER")
   fi
 
-  echo "[serve] starting stage=$idx host=$host layers=${start_layer}:${end_layer} api_port=$api_port grpc_port=$grpc_port"
+  echo "[serve] starting stage=$idx host=$host gpu=$gpu_id layers=${start_layer}:${end_layer} api_port=$api_port grpc_port=$grpc_port"
   {
     printf "# host: %s\n" "$host"
+    printf "# cuda_visible_devices: %s\n" "$gpu_id"
     printf "# layers: %s:%s\n" "$start_layer" "$end_layer"
     printf "# command:"
+    printf " CUDA_VISIBLE_DEVICES=%q" "$gpu_id"
     printf " %q" "${server_cmd[@]}"
     echo
     echo
   } > "$server_log"
 
-  if [[ "$idx" -eq 0 ]]; then
+  if [[ "$host" == "$HEAD_HOST" ]]; then
     (
       cd "$REMOTE_MOLINK_DIR"
+      export CUDA_VISIBLE_DEVICES="$gpu_id"
       "${server_cmd[@]}"
     ) >> "$server_log" 2>&1 &
   else
     remote_dir="$(remote_quote "$REMOTE_MOLINK_DIR")"
-    remote_command="cd $remote_dir && $(printf "%q " "${server_cmd[@]}")"
+    remote_command="cd $remote_dir && CUDA_VISIBLE_DEVICES=$(remote_quote "$gpu_id") $(printf "%q " "${server_cmd[@]}")"
     ssh "${SSH_ARGS[@]}" "$host" "bash -lc $(remote_quote "$remote_command")" >> "$server_log" 2>&1 &
   fi
   SERVER_PIDS+=("$!")

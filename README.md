@@ -42,6 +42,24 @@ Useful overrides:
 
 The wrapper writes `summary.tsv` and per-framework stdout logs under `logs/single_node/<run-id>` unless `/logs` is writable.
 
+### single-node multi-GPU benchmark automation
+Runs the single-node GPU-count sweep for vLLM, FlexGen, and MoLink.
+
+```
+GPU_COUNTS="1 2 4" ./run_single_node_multi_gpu_benchmarks.sh
+```
+
+Useful overrides:
+- `FRAMEWORKS="vLLM MoLink"`: select frameworks.
+- `GPU_COUNTS="4 8"`: select local GPU counts.
+- `SINGLE_NODE_HOST=127.0.0.1`: host used for local MoLink stages.
+- `STOP_ON_FAILURE=1`: stop after the first failed run.
+- `LOG_DIR=/path/to/logs`: change orchestration log location.
+
+For vLLM, the wrapper uses `TP=gpu_count` and `PP=1`. For FlexGen, it runs the distributed benchmark with `GPUS_PER_NODE=gpu_count` on the local node. For MoLink, it expands the local host into `gpu_count` pipeline stages and pins each stage with `CUDA_VISIBLE_DEVICES`.
+
+The wrapper writes `summary.tsv` and per-framework stdout logs under `logs/single_node_multi_gpu/<run-id>` unless `/logs` is writable.
+
 ### multi-node benchmark automation
 Runs the multi-node benchmark scripts for vLLM, FlexGen, and MoLink in sequence.
 
@@ -55,8 +73,8 @@ Useful overrides:
 - `LOG_DIR=/path/to/logs`: change orchestration log location.
 - `VLLM_HOSTFILE=./hosts_4gpu`: hostfile only for vLLM.
 - `FLEXGEN_HOSTFILE=./hosts_4gpu`: hostfile only for FlexGen.
-- `MOLINK_HOSTFILE=./hosts_1gpu`: hostfile only for MoLink.
+- `MOLINK_HOSTFILE=./hosts_molink`: hostfile only for MoLink.
 
-The wrapper passes `HEAD_ADDRESS` and `HEAD_IP` to child scripts. If only one is set, it reuses that value for the other. MoLink is still run as a multi-node pipeline benchmark; this automation maps one pipeline stage to one host, so use a MoLink-specific hostfile with `slots=1` when your vLLM/FlexGen hostfile uses multi-GPU nodes.
+The wrapper passes `HEAD_ADDRESS` and `HEAD_IP` to child scripts. If only one is set, it reuses that value for the other. MoLink maps one pipeline stage to one GPU slot, so a hostfile with `slots=4` starts four MoLink stages on that host.
 
 The wrapper writes `summary.tsv` and per-framework stdout logs under `logs/multi_node/<run-id>` unless `/logs` is writable.

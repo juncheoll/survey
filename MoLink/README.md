@@ -23,7 +23,7 @@ python -m molinkv1.entrypoints.api_server \
 ```
 
 ### benchmark Llama 70B with hostfile
-MoLink uses multi-node pipeline parallelism. This wrapper maps one pipeline stage to one host, so the current hostfile format expects one GPU slot per host. It reads a hostfile, splits the 80 Llama-2-70B layers across nodes, starts one MoLink server per node, and runs `vllm bench serve` against the first node's OpenAI-compatible API.
+MoLink uses pipeline parallelism. This wrapper maps one pipeline stage to one GPU slot, splits the 80 Llama-2-70B layers across stages, starts one MoLink server per stage, and runs `vllm bench serve` against the first stage's OpenAI-compatible API.
 
 Hostfile format:
 
@@ -31,6 +31,14 @@ Hostfile format:
 192.168.79.22 slots=1
 192.168.79.23 slots=1
 ```
+
+For single-node multi-GPU, use one host with multiple slots:
+
+```
+127.0.0.1 slots=4
+```
+
+The wrapper sets `CUDA_VISIBLE_DEVICES` per stage, so `slots=4` starts four local MoLink servers on GPU `0`, `1`, `2`, and `3`.
 
 Run on the first host in the hostfile:
 
@@ -62,6 +70,7 @@ Defaults:
 Useful overrides:
 - `SSH_PORT=2222`: use the same non-default SSH port for every worker.
 - `REMOTE_MOLINK_DIR=/workspace/MoLink`: path to this directory on every node.
+- `GPUS_PER_NODE=4`: when using `HOSTS` instead of `HOSTFILE`, expand each host into four GPU stages.
 - `MAX_CONCURRENCIES="16 32 64"`: sweep benchmark concurrency values.
 - `IGNORE_EOS=0`: omit `--ignore-eos` from `vllm bench serve`.
 - `MOLINK_EXTRA_SERVER_ARGS="..."`: append extra args to each MoLink server.
