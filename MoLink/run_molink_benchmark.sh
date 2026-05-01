@@ -332,15 +332,33 @@ grpc_port_for_stage() {
 RUN_ID="$(date +"%Y%m%d-%H%M%S")"
 RUN_LOG_DIR="$LOG_DIR/$RUN_ID"
 SUMMARY_LOG="$RUN_LOG_DIR/summary.tsv"
+CONTROLLER_LOG="$RUN_LOG_DIR/controller.stdout.log"
 mkdir -p "$RUN_LOG_DIR"
+exec > >(tee -a "$CONTROLLER_LOG") 2>&1
 
 SERVER_PIDS=()
 SERVER_PID_LABELS=()
 SERVER_PID_LOGS=()
 
+check_server_pids_alive() {
+  local pid_idx
+  local pid
+  for pid_idx in "${!SERVER_PIDS[@]}"; do
+    pid="${SERVER_PIDS[$pid_idx]}"
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "[serve] server process exited: ${SERVER_PID_LABELS[$pid_idx]}" >&2
+      echo "[serve] log: ${SERVER_PID_LOGS[$pid_idx]}" >&2
+      tail -n 80 "${SERVER_PID_LOGS[$pid_idx]}" >&2 || true
+      return 1
+    fi
+  done
+  return 0
+}
+
 cleanup() {
   local exit_code=$?
   local host
+  echo "[cleanup] exit_code=$exit_code"
   for pid in "${SERVER_PIDS[@]:-}"; do
     if kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
@@ -537,15 +555,7 @@ while true; do
     break
   fi
 
-  for pid_idx in "${!SERVER_PIDS[@]}"; do
-    pid="${SERVER_PIDS[$pid_idx]}"
-    if ! kill -0 "$pid" 2>/dev/null; then
-      echo "[serve] server process exited before readiness: ${SERVER_PID_LABELS[$pid_idx]}" >&2
-      echo "[serve] log: ${SERVER_PID_LOGS[$pid_idx]}" >&2
-      tail -n 40 "${SERVER_PID_LOGS[$pid_idx]}" >&2 || true
-      exit 1
-    fi
-  done
+  check_server_pids_alive || exit 1
   if [[ "$SECONDS" -ge "$deadline" ]]; then
     echo "[serve] timed out waiting for all MoLink stages. Not ready: ${not_ready_stages[*]:-head API}" >&2
     echo "[serve] see $RUN_LOG_DIR/server_stage_*.stdout.log" >&2
@@ -558,6 +568,7 @@ if [[ "$PIPELINE_READY_GRACE_SEC" -gt 0 ]]; then
   echo "[serve] all stages are reachable; waiting ${PIPELINE_READY_GRACE_SEC}s for topology to settle"
   sleep "$PIPELINE_READY_GRACE_SEC"
 fi
+check_server_pids_alive || exit 1
 
 failed=0
 server_logs_joined="$(IFS=,; echo "${SERVER_LOGS[*]}")"
