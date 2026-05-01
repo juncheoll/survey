@@ -81,6 +81,33 @@ def _make_length_controlled_dataset_prompt(prompts, tokenizer, target_tokens, pr
     if target_tokens is None or target_tokens <= 0:
         return prompts[prompt_index]
 
+    best_index = None
+    best_len = 0
+    for offset in range(len(prompts)):
+        candidate_index = (prompt_index + offset) % len(prompts)
+        candidate = prompts[candidate_index]
+        token_count = len(tokenizer.encode(candidate, add_special_tokens=False))
+        if token_count >= target_tokens:
+            return _make_length_controlled_prompt(candidate, tokenizer, target_tokens), candidate_index, token_count
+        if token_count > best_len:
+            best_index = candidate_index
+            best_len = token_count
+
+    raise ValueError(
+        f"No single dataset prompt has at least {target_tokens} tokens. "
+        f"Longest prompt has {best_len} tokens at index {best_index}."
+    )
+
+
+def _make_repeated_length_controlled_dataset_prompt(prompts, tokenizer, target_tokens, prompt_index):
+    prompts = list(prompts)
+    if not prompts:
+        raise ValueError("Cannot build prompt from an empty dataset")
+    if prompt_index < 0 or prompt_index >= len(prompts):
+        raise ValueError(f"EASYSPEC_PROMPT_INDEX={prompt_index} is out of range for {len(prompts)} prompts")
+    if target_tokens is None or target_tokens <= 0:
+        return prompts[prompt_index], prompt_index, len(tokenizer.encode(prompts[prompt_index], add_special_tokens=False))
+
     pieces = []
     token_count = 0
     cursor = prompt_index
@@ -92,7 +119,17 @@ def _make_length_controlled_dataset_prompt(prompts, tokenizer, target_tokens, pr
         if cursor - prompt_index > len(prompts) * 2 and token_count == 0:
             raise ValueError("Cannot build length-controlled prompt from empty dataset prompts")
 
-    return _make_length_controlled_prompt("\n\n".join(pieces), tokenizer, target_tokens)
+    return _make_length_controlled_prompt("\n\n".join(pieces), tokenizer, target_tokens), prompt_index, token_count
+
+
+def _select_length_controlled_dataset_prompt(prompts, tokenizer, target_tokens, prompt_index, allow_concat):
+    if allow_concat:
+        return _make_repeated_length_controlled_dataset_prompt(prompts, tokenizer, target_tokens, prompt_index)
+    return _make_length_controlled_dataset_prompt(prompts, tokenizer, target_tokens, prompt_index)
+
+
+def _prompt_token_count(prompt, tokenizer):
+    return len(tokenizer.encode(prompt, add_special_tokens=False))
 
 
 def _default_specexec_prompts_file():
@@ -218,6 +255,7 @@ def main():
     use_specexec_prompt = _env_bool("EASYSPEC_USE_SPECEXEC_PROMPT", test_input_tokens > 0 or test_input_text is not None)
     ignore_eos = _env_bool("EASYSPEC_IGNORE_EOS", False)
     prompt_index = _env_int("EASYSPEC_PROMPT_INDEX", 0)
+    allow_prompt_concat = _env_bool("EASYSPEC_ALLOW_PROMPT_CONCAT", False)
     default_datasets = ["specexec_prompt"] if use_specexec_prompt else ['mmlu', 'humaneval', 'math', 'ifeval_strict', 'mgsm']
     datasets = _env_list("EASYSPEC_DATASETS", default_datasets)
     tree_hyper_params = [(
@@ -328,16 +366,23 @@ def main():
                     test_input_text = _load_prompt_text(prompts_file)
                 if test_input_text is not None:
                     prompt = _make_length_controlled_prompt(test_input_text, tokenizer, test_input_tokens)
+                    selected_prompt_index = "custom"
+                    source_prompt_tokens = _prompt_token_count(test_input_text, tokenizer)
                     prompts = [prompt]
                     test_start = 0
                     test_end = 1
                 else:
                     prompts = get_prompts_from_name(dataset_name, use_generator=False, tokenizer=tokenizer, tokenizer_kwargs=tokenizer_kwargs)
                     if test_input_tokens > 0:
-                        prompt = _make_length_controlled_dataset_prompt(prompts, tokenizer, test_input_tokens, prompt_index)
+                        prompt, selected_prompt_index, source_prompt_tokens = _select_length_controlled_dataset_prompt(
+                            prompts, tokenizer, test_input_tokens, prompt_index, allow_prompt_concat
+                        )
                         prompts = [prompt]
                         test_start = 0
                         test_end = 1
+                    else:
+                        selected_prompt_index = prompt_index
+                        source_prompt_tokens = _prompt_token_count(prompts[prompt_index], tokenizer) if prompts else 0
                 model = DistributedInferenceEngine.from_pretrained(
                     model_dir, 
                     **from_pretrained_kwargs
@@ -368,6 +413,9 @@ def main():
                 print_and_record(fd, f"test_input_tokens: {test_input_tokens}")
                 print_and_record(fd, f"test_input_source: {'custom/spec_exec' if test_input_text is not None else dataset_name}")
                 print_and_record(fd, f"ignore_eos: {ignore_eos}")
+                print_and_record(fd, f"selected_prompt_index: {selected_prompt_index}")
+                print_and_record(fd, f"source_prompt_tokens: {source_prompt_tokens}")
+                print_and_record(fd, f"allow_prompt_concat: {allow_prompt_concat}")
                 print_and_record(fd, f"assistant_confidence_threshold: {assistant_confidence_threshold}")
                 print_and_record(fd, f"use_assistant_model: {use_assistant_model}")
                 print_and_record(fd, f"enable_tree_attention: {enable_tree_attention}")
