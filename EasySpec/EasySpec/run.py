@@ -172,6 +172,7 @@ def main():
     visible_devices = os.environ.get("EASYSPEC_CUDA_VISIBLE_DEVICES", os.environ.get("CUDA_VISIBLE_DEVICES", "0,1,2,3,4,5,6,7"))
     os.environ['CUDA_VISIBLE_DEVICES'] = visible_devices
     os.environ['TOKENIZERS_PARALLELISM'] = "false"
+    os.environ["NCCL_DEBUG"] = os.environ.get("EASYSPEC_NCCL_DEBUG", "WARN")
     world_size = _env_int("EASYSPEC_WORLD_SIZE", len([device for device in visible_devices.split(",") if device.strip()]))
     model_dtype = torch.bfloat16
                 
@@ -345,6 +346,8 @@ def main():
                 start = time.time()
                 
                 total_gen_length = 0
+                total_ttft = 0.0
+                ttft_count = 0
                 for i,prompt in enumerate(prompts):
                     if i < test_start:
                         continue                    
@@ -374,6 +377,9 @@ def main():
                     this_num_candidate_tokens = res_dict["this_num_candidate_tokens"]
                     this_assistant_runtime = res_dict["this_assistant_runtime"]
                     this_ttft = res_dict.get("this_ttft", 0.0)
+                    if this_ttft > 0:
+                        total_ttft += this_ttft
+                        ttft_count += 1
                     num_accepted_tokens = res_dict["num_accepted_tokens"]
                     num_candidate_tokens = res_dict["num_candidate_tokens"]
                     assistant_runtime = res_dict["assistant_runtime"]
@@ -417,6 +423,7 @@ def main():
                 print_and_record(fd, f"assistant_model_run_time: {assistant_model_run_time}")
                 print_and_record(fd, f"sum_generation_tokens: {sum_generation_tokens}")
                 print_and_record(fd, f"tokens per second: {sum_generation_tokens/exact_run_time}")
+                print_and_record(fd, f"ttft: {total_ttft / max(ttft_count, 1)}")
                 print_and_record(fd, f"tpot: {exact_run_time / (sum_generation_tokens + 1e-5)}")
                 print_and_record(fd, f"accept_rate: {accept_num}/{candidate_num} = {accept_num / (candidate_num+1e-5)}")
                 
