@@ -127,6 +127,7 @@ def _build_settings_snapshot(
         "max_length": getattr(config, "max_length", None),
         "max_new_tokens": getattr(config, "max_new_tokens", None),
         "test_input_tokens": getattr(config, "test_input_tokens", None),
+        "test_input_text": getattr(config, "test_input_text", None),
         "test_input_token_text": getattr(config, "test_input_token_text", None),
         "test_prompt": getattr(config, "test_prompt", None),
         "ignore_eos": getattr(config, "ignore_eos", None),
@@ -310,10 +311,16 @@ def _build_full_parser(base_parser: argparse.ArgumentParser, default_config: Dic
     full_parser.add_argument("--max-new-tokens", type=int, default=default_config.get("max_new_tokens"))
     full_parser.add_argument("--test-input-tokens", type=int, default=default_config.get("test_input_tokens"))
     full_parser.add_argument(
+        "--test-input-text",
+        type=str,
+        default=default_config.get("test_input_text"),
+        help="Natural text repeated and token-truncated to satisfy --test-input-tokens",
+    )
+    full_parser.add_argument(
         "--test-input-token-text",
         type=str,
         default=default_config.get("test_input_token_text", " hello"),
-        help="Text used to select the repeated token for synthetic run-test prompts",
+        help="Deprecated; length-controlled prompts now use natural text from --test-input-text or --test-prompt",
     )
     full_parser.add_argument("--test-prompt", type=str, default=default_config.get("test_prompt"))
     full_parser.add_argument(
@@ -425,6 +432,7 @@ def _apply_cli_overrides(config: AppConfig, config_args: argparse.Namespace) -> 
     config.max_length = int(config_args.max_length)
     config.max_new_tokens = config_args.max_new_tokens
     config.test_input_tokens = config_args.test_input_tokens
+    config.test_input_text = config_args.test_input_text
     config.test_input_token_text = config_args.test_input_token_text
     config.test_prompt = config_args.test_prompt
     config.ignore_eos = bool(config_args.ignore_eos)

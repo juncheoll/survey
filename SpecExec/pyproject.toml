@@ -1,0 +1,17 @@
+[project]
+name = "specexec"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "accelerate>=1.13.0",
+    "anytree>=2.12.0",
+    "auto-gptq>=0.7.1",
+    "numpy>=1.24",
+    "optimum>=1.19.0,<2",
+    "pandas>=2.0.3",
+    "peft>=0.5,<0.11",
+    "torch>=2.3",
+    "transformers>=4.41,<4.42",
+]

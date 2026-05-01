@@ -24,6 +24,7 @@ QUANT_MODES="${QUANT_MODES:-off int4}"
 PROMPT_LEN="${PROMPT_LEN:-1024}"
 GEN_LEN="${GEN_LEN:-256}"
 NUM_GPUS="${NUM_GPUS:-1}"
+RUN_LOOPS="${RUN_LOOPS:-1}"
 DEEPSPEED_BIN="${DEEPSPEED_BIN:-deepspeed}"
 
 if [[ -z "${LOG_DIR:-}" ]]; then
@@ -94,6 +95,7 @@ cd "$BENCH_DIR"
   echo "# quant_modes: ${QUANT_MODE_LIST[*]}"
   echo "# prompt_len: $PROMPT_LEN"
   echo "# gen_len: $GEN_LEN"
+  echo "# run_loops: $RUN_LOOPS"
   echo "# cpu_offload: true"
   echo "# kv_offload: true"
   echo "# dummy: true"
@@ -140,6 +142,7 @@ run_one() {
     --batch-size "$batch_size"
     --prompt-len "$PROMPT_LEN"
     --gen-len "$GEN_LEN"
+    --loops "$RUN_LOOPS"
     --cpu-offload
     --kv-offload
     --log-file "$metrics_log"

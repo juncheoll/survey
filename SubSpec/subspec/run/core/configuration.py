@@ -23,6 +23,7 @@ class AppConfig:
     max_length: int = 2048
     max_new_tokens: Optional[int] = None
     test_input_tokens: Optional[int] = None
+    test_input_text: Optional[str] = None
     test_input_token_text: str = " hello"
     test_prompt: Optional[str] = None
     ignore_eos: bool = False

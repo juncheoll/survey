@@ -35,17 +35,25 @@ def _build_input_ids(tokenizer, messages, device):
     return tokenizer(prompt, return_tensors="pt")["input_ids"].to(device)
 
 
-def _synthetic_token_id(tokenizer, token_text):
-    token_ids = tokenizer.encode(token_text, add_special_tokens=False)
-    special_ids = set(getattr(tokenizer, "all_special_ids", []) or [])
-    for token_id in token_ids:
-        if token_id not in special_ids:
-            return int(token_id)
-    if token_ids:
-        return int(token_ids[0])
-    if getattr(tokenizer, "unk_token_id", None) is not None:
-        return int(tokenizer.unk_token_id)
-    raise ValueError(f"Could not tokenize test_input_token_text={token_text!r}")
+def _make_length_controlled_prompt(tokenizer, prompt_text, target_tokens):
+    token_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
+    if not token_ids:
+        token_ids = tokenizer.encode(" ", add_special_tokens=False)
+    if not token_ids:
+        raise ValueError(f"Could not tokenize test prompt for {target_tokens} input tokens")
+
+    separator = "\n\n"
+    repeat_ids = tokenizer.encode(separator + prompt_text, add_special_tokens=False)
+    if not repeat_ids:
+        repeat_ids = token_ids
+
+    input_ids = list(token_ids)
+    while len(input_ids) < target_tokens:
+        input_ids.extend(repeat_ids)
+
+    input_ids = input_ids[:target_tokens]
+    prompt = tokenizer.decode(input_ids, skip_special_tokens=False)
+    return prompt, torch.tensor([input_ids], dtype=torch.long)
 
 
 def _prepare_test_input(tokenizer, args, input_message):
@@ -54,20 +62,9 @@ def _prepare_test_input(tokenizer, args, input_message):
         n_input_tokens = int(n_input_tokens)
         if n_input_tokens <= 0:
             raise ValueError("test_input_tokens must be a positive integer")
-        token_text = getattr(args, "test_input_token_text", " hello")
-        token_id = _synthetic_token_id(tokenizer, token_text)
-        input_ids = torch.full(
-            (1, n_input_tokens),
-            token_id,
-            dtype=torch.long,
-            device=args.device,
-        )
-        prompt = tokenizer.decode(input_ids[0], skip_special_tokens=False)
-        synthetic_message = (
-            f"<synthetic prompt: {n_input_tokens} tokens, "
-            f"token_id={token_id}, token_text={token_text!r}>"
-        )
-        return synthetic_message, prompt, input_ids, token_id
+        prompt_source = getattr(args, "test_input_text", None) or input_message
+        prompt, input_ids = _make_length_controlled_prompt(tokenizer, prompt_source, n_input_tokens)
+        return input_message, prompt, input_ids.to(args.device), None
 
     messages = [{"role": "user", "content": input_message}]
     tokenizer.use_default_system_prompt = True
@@ -195,6 +192,7 @@ def main(builder):
         "synthetic_input": synthetic_token_id is not None,
         "synthetic_input_token_id": synthetic_token_id,
         "test_input_tokens": getattr(args, "test_input_tokens", None),
+        "test_input_text": getattr(args, "test_input_text", None),
         "test_input_token_text": getattr(args, "test_input_token_text", None),
         "ignore_eos": bool(getattr(args, "ignore_eos", False)),
         "elapsed_time": float(total_time_s),

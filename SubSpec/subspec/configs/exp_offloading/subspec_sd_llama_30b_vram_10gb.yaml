@@ -4,7 +4,14 @@ seed: 0
 device: cuda:0
 max_length: 2048
 max_new_tokens: 2048
-test_prompt: "Do you know what is Beyblade? What is the best strategy to build the strongest Beyblade?"
+test_prompt: |
+  [INST] <<SYS>>
+  You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.
+  If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information.
+  <</SYS>
+
+
+  What is a Dyson Sphere? [\INST]
 
 llm_path: huggyllama/llama-30b
 # Optional: pin Hugging Face to an existing cache and fail fast instead of

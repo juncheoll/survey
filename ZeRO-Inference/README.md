@@ -53,10 +53,12 @@ The script runs `uv sync`, activates `.venv`, and benchmarks:
 
 Each model is tested with the configured batch sizes using `--prompt-len 1024` and `--gen-len 256`.
 For each batch size, the script runs both the default mode and the 4-bit quantized mode with `--quant-bits 4`.
+The wrapper runs `run_model.py --loops 1` by default so each configuration performs one measured generation pass.
 
 Useful overrides:
 - `GPU_BATCH_SIZES="1 2 4 8"`: select batch sizes.
 - `QUANT_MODES=off`: run only the default mode.
 - `QUANT_MODES=int4`: run only the 4-bit quantized mode.
+- `RUN_LOOPS=3`: restore the original ZeRO-Inference script behavior of three internal generation passes.
 
 Logs are written to `/logs/zero_inference/<run-id>` inside the Docker container, or `./logs/zero_inference/<run-id>` outside the container.
