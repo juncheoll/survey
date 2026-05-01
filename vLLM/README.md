@@ -86,6 +86,14 @@ Useful overrides:
 
 Logs are written to `/logs/vllm/<run-id>` if `/logs` is writable, otherwise `./logs/vllm/<run-id>`.
 
+For single-node multi-GPU pipeline-parallel experiments, use the top-level wrapper. On an 8-GPU node:
+
+```
+GPU_COUNTS="8" VLLM_PIPELINE_PARALLEL_SIZE=2 ./run_single_node_multi_gpu_benchmarks.sh
+```
+
+This runs vLLM without Ray by default and maps the local 8 GPUs as `TP=4, PP=2`. Override `VLLM_TENSOR_PARALLEL_SIZE` only when you want to choose both values manually; `TP x PP` must equal the GPU count.
+
 For example, this hostfile:
 
 ```

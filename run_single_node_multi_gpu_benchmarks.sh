@@ -42,6 +42,8 @@ mkdir -p "$RUN_LOG_DIR"
 run_framework_gpu_count() {
   local framework="$1"
   local gpu_count="$2"
+  local vllm_pp
+  local vllm_tp
   local script_path
   local framework_log_dir
   local stdout_log
@@ -110,12 +112,32 @@ run_framework_gpu_count() {
 
     case "$framework" in
       vLLM)
+        vllm_pp="${VLLM_PIPELINE_PARALLEL_SIZE:-${PIPELINE_PARALLEL_SIZE:-1}}"
+        if [[ ! "$vllm_pp" =~ ^[0-9]+$ ]] || [[ "$vllm_pp" -lt 1 ]]; then
+          echo "[run] invalid vLLM pipeline parallel size: $vllm_pp" >&2
+          exit 2
+        fi
+        if [[ $((gpu_count % vllm_pp)) -ne 0 ]]; then
+          echo "[run] gpu_count=$gpu_count must be divisible by vLLM PP=$vllm_pp" >&2
+          exit 2
+        fi
+        vllm_tp="${VLLM_TENSOR_PARALLEL_SIZE:-${TENSOR_PARALLEL_SIZE:-$((gpu_count / vllm_pp))}}"
+        if [[ ! "$vllm_tp" =~ ^[0-9]+$ ]] || [[ "$vllm_tp" -lt 1 ]]; then
+          echo "[run] invalid vLLM tensor parallel size: $vllm_tp" >&2
+          exit 2
+        fi
+        if [[ $((vllm_tp * vllm_pp)) -ne "$gpu_count" ]]; then
+          echo "[run] vLLM TP x PP must equal gpu_count. Got TP=$vllm_tp PP=$vllm_pp gpu_count=$gpu_count" >&2
+          exit 2
+        fi
+        echo "# vllm_tensor_parallel_size: $vllm_tp"
+        echo "# vllm_pipeline_parallel_size: $vllm_pp"
         env \
           HOSTFILE="" \
           HOSTS="" \
           GPUS_PER_NODE="$gpu_count" \
-          TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-$gpu_count}" \
-          PIPELINE_PARALLEL_SIZE="${PIPELINE_PARALLEL_SIZE:-1}" \
+          TENSOR_PARALLEL_SIZE="$vllm_tp" \
+          PIPELINE_PARALLEL_SIZE="$vllm_pp" \
           RUN_RAY_SETUP="${RUN_RAY_SETUP:-0}" \
           VLLM_DISTRIBUTED_EXECUTOR_BACKEND="${VLLM_DISTRIBUTED_EXECUTOR_BACKEND:-}" \
           VLLM_USE_V1="${VLLM_USE_V1:-0}" \

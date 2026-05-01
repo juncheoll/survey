@@ -25,6 +25,7 @@ MODEL_SIZES=(${MODEL_SIZES:-${DEFAULT_MODEL_SIZES[*]}})
 
 TEST_INPUT_TOKENS="${TEST_INPUT_TOKENS:-1024}"
 MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-256}"
+MAX_LENGTH="${MAX_LENGTH:-$((TEST_INPUT_TOKENS + MAX_NEW_TOKENS))}"
 IGNORE_EOS="${IGNORE_EOS:-1}"
 DOWNLOAD_MODELS="${DOWNLOAD_MODELS:-1}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
@@ -57,6 +58,7 @@ fi
 
 # shellcheck source=/dev/null
 source "$VENV_ACTIVATE"
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 if [[ ! -d "$SUBSPEC_DIR" ]]; then
   echo "[setup] subspec directory not found: $SUBSPEC_DIR" >&2
@@ -93,7 +95,7 @@ fi
 expand_path() {
   local path="$1"
   if [[ "$path" == "~/"* ]]; then
-    printf "%s/%s\n" "$HOME" "${path#~/}"
+    printf "%s/%s\n" "$HOME" "${path#\~/}"
   else
     printf "%s\n" "$path"
   fi
@@ -189,6 +191,7 @@ ensure_model_cached() {
   echo "# test_input_tokens: $TEST_INPUT_TOKENS"
   echo "# test_input_text_source: ${SPECEXEC_PROMPTS_FILE}"
   echo "# max_new_tokens: $MAX_NEW_TOKENS"
+  echo "# max_length: $MAX_LENGTH"
   echo "# ignore_eos: $IGNORE_EOS"
   echo "# download_models: $DOWNLOAD_MODELS"
   printf "started_at\tended_at\tduration_sec\tmodel_size\tvram_limit_gb\tconfig\tstatus\texit_code\tstdout_log\texperiment_log_dir\n"
@@ -240,6 +243,7 @@ run_one() {
   cmd=(
     "$PYTHON_BIN" -m run.main
     --config "$config_rel"
+    --max-length "$MAX_LENGTH"
     --test-input-tokens "$TEST_INPUT_TOKENS"
     --max-new-tokens "$MAX_NEW_TOKENS"
   )
