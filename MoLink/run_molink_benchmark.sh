@@ -28,7 +28,8 @@ SERVER_START_TIMEOUT_SEC="${SERVER_START_TIMEOUT_SEC:-900}"
 STAGE_START_TIMEOUT_SEC="${STAGE_START_TIMEOUT_SEC:-$SERVER_START_TIMEOUT_SEC}"
 SERVER_START_STAGGER_SEC="${SERVER_START_STAGGER_SEC:-5}"
 PIPELINE_READY_GRACE_SEC="${PIPELINE_READY_GRACE_SEC:-5}"
-CLEANUP_EXISTING_SERVERS="${CLEANUP_EXISTING_SERVERS:-1}"
+CLEANUP_EXISTING_SERVERS="${CLEANUP_EXISTING_SERVERS:-0}"
+CLEANUP_ON_EXIT="${CLEANUP_ON_EXIT:-0}"
 
 NUM_PROMPTS="${NUM_PROMPTS:-64}"
 NUM_PROMPTS_PER_CONCURRENCY="${NUM_PROMPTS_PER_CONCURRENCY:-0}"
@@ -359,6 +360,10 @@ cleanup() {
   local exit_code=$?
   local host
   echo "[cleanup] exit_code=$exit_code"
+  if [[ "$CLEANUP_ON_EXIT" == "0" ]]; then
+    echo "[cleanup] leaving MoLink API servers running because CLEANUP_ON_EXIT=0"
+    exit "$exit_code"
+  fi
   for pid in "${SERVER_PIDS[@]:-}"; do
     if kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
