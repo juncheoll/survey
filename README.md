@@ -55,6 +55,7 @@ Useful overrides:
 - `SINGLE_NODE_HOST=127.0.0.1`: host used for local MoLink stages.
 - `GPU_MEMORY_UTILIZATION=0.75`: lower vLLM/MoLink GPU memory reservation if startup sees insufficient free memory.
 - `VLLM_DISTRIBUTED_EXECUTOR_BACKEND=ray`: force Ray for vLLM; by default single-node runs without Ray.
+- `VLLM_USE_V1=0`: force vLLM V0 engine. This is the default for the vLLM benchmark wrapper.
 - `VLLM_ENFORCE_EAGER=1`: disable vLLM compile/cudagraph startup path for debugging unstable launches.
 - `VLLM_DISABLE_CUSTOM_ALL_REDUCE=1`: explicitly disable vLLM custom all-reduce.
 - `STOP_ON_FAILURE=1`: stop after the first failed run.

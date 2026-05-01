@@ -118,6 +118,7 @@ run_framework_gpu_count() {
           PIPELINE_PARALLEL_SIZE="${PIPELINE_PARALLEL_SIZE:-1}" \
           RUN_RAY_SETUP="${RUN_RAY_SETUP:-0}" \
           VLLM_DISTRIBUTED_EXECUTOR_BACKEND="${VLLM_DISTRIBUTED_EXECUTOR_BACKEND:-}" \
+          VLLM_USE_V1="${VLLM_USE_V1:-0}" \
           HEAD_ADDRESS="$COMMON_HEAD_ADDRESS" \
           LOG_DIR="$framework_log_dir" \
           "$script_path"

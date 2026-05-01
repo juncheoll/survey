@@ -69,11 +69,13 @@ Defaults:
 - `NUM_PROMPTS=64`
 - `NUM_PROMPTS_PER_CONCURRENCY=0`
 - `MAX_CONCURRENCIES="1 2 4 8"`
+- `VLLM_USE_V1=0`
 - `MAX_NUM_SEQS` is unset by default, so vLLM uses its own server-side default.
 
 Useful overrides:
 - `RUN_RAY_SETUP=0`: reuse an existing Ray cluster.
 - `RAY_STOP_FIRST=0`: do not stop existing Ray processes during setup.
+- `VLLM_USE_V1=1`: opt back into the vLLM V1 engine.
 - `MAX_CONCURRENCIES="16 32 64"`: sweep benchmark concurrency values.
 - `NUM_PROMPTS_PER_CONCURRENCY=1`: set `--num-prompts` equal to each `MAX_CONCURRENCIES` value.
 - `MAX_NUM_SEQS=64`: explicitly set vLLM server-side max sequences.

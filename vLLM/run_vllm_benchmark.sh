@@ -33,6 +33,7 @@ VLLM_EXTRA_SERVE_ARGS="${VLLM_EXTRA_SERVE_ARGS:-}"
 VLLM_EXTRA_BENCH_ARGS="${VLLM_EXTRA_BENCH_ARGS:-}"
 VLLM_ENFORCE_EAGER="${VLLM_ENFORCE_EAGER:-0}"
 VLLM_DISABLE_CUSTOM_ALL_REDUCE="${VLLM_DISABLE_CUSTOM_ALL_REDUCE:-0}"
+VLLM_USE_V1="${VLLM_USE_V1:-0}"
 IGNORE_EOS="${IGNORE_EOS:-1}"
 
 if [[ -z "${LOG_DIR:-}" ]]; then
@@ -147,6 +148,7 @@ echo "[setup] total gpu slots: $TOTAL_GPUS"
 echo "[setup] running uv sync on head"
 uv sync
 source "$SCRIPT_DIR/.venv/bin/activate"
+export VLLM_USE_V1
 
 if [[ "$RUN_RAY_SETUP" != "0" && "$VLLM_DISTRIBUTED_EXECUTOR_BACKEND" == "ray" ]]; then
   "$SCRIPT_DIR/run_vllm_ray_setup.sh"
@@ -167,6 +169,7 @@ fi
   echo "# max_model_len: $MAX_MODEL_LEN"
   echo "# max_num_seqs: ${MAX_NUM_SEQS:-vllm_default}"
   echo "# gpu_memory_utilization: $GPU_MEMORY_UTILIZATION"
+  echo "# vllm_use_v1: $VLLM_USE_V1"
   echo "# enforce_eager: $VLLM_ENFORCE_EAGER"
   echo "# disable_custom_all_reduce: $VLLM_DISABLE_CUSTOM_ALL_REDUCE"
   echo "# random_input_len: $RANDOM_INPUT_LEN"
