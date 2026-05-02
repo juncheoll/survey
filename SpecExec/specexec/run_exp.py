@@ -162,8 +162,16 @@ def run_tests(
 
     for i in range(args.dataset_start_index, min(args.dataset_start_index + args.n_tests, len(dataset))):
         prompt = dataset[i]
+        selected_prompt_index = i
+        source_prompt_tokens = None
         if args.test_input_tokens is not None:
-            prompt = make_prompt_length(prompt, spec_generator.tokenizer, args.test_input_tokens)
+            prompt, selected_prompt_index, source_prompt_tokens = select_length_controlled_dataset_prompt(
+                dataset,
+                spec_generator.tokenizer,
+                args.test_input_tokens,
+                prompt_index=i,
+                allow_concat=args.test_allow_prompt_concat,
+            )
         _ = spec_generator.generate(
             prompt,
             max_n_beams=max_n_beams,
@@ -189,7 +197,13 @@ def run_tests(
 
         excl_keys = ["ver", "model_name_0", "model_name_1"]
         log1 = {k: v for k, v in spec_generator.summary.items() if k not in excl_keys}
-        log1 = {"run": i, **log1, "text": generated_text[:32]}
+        log1 = {
+            "run": i,
+            "selected_prompt_index": selected_prompt_index,
+            "source_prompt_tokens": source_prompt_tokens,
+            **log1,
+            "text": generated_text[:32],
+        }
         log1["prompt_text"] = log1["prompt_text"].replace(r" [\INST] ", "")[-32:]  # last 32 prompt chars
 
         stdout_whitelist = (
@@ -240,7 +254,7 @@ def run_tests(
 
 
 def make_prompt_length(prompt, tokenizer, target_tokens):
-    """Repeat/truncate a dataset prompt so benchmark input length is controlled."""
+    """Truncate a prompt so benchmark input length is controlled."""
     if target_tokens <= 0:
         raise ValueError(f"test_input_tokens must be positive, got {target_tokens}")
 
@@ -248,14 +262,53 @@ def make_prompt_length(prompt, tokenizer, target_tokens):
     if not token_ids:
         token_ids = tokenizer.encode(" ")
 
-    extra_token_ids = tokenizer.encode(" " + prompt, add_special_tokens=False)
-    if not extra_token_ids:
-        extra_token_ids = token_ids
-
-    while len(token_ids) < target_tokens:
-        token_ids.extend(extra_token_ids)
+    if len(token_ids) < target_tokens:
+        raise ValueError(f"Prompt has only {len(token_ids)} tokens; need at least {target_tokens} tokens")
 
     return tokenizer.decode(token_ids[:target_tokens], skip_special_tokens=False)
+
+
+def select_length_controlled_dataset_prompt(dataset, tokenizer, target_tokens, prompt_index=0, allow_concat=False):
+    """Select one dataset prompt with enough tokens, then truncate it.
+
+    This mirrors EasySpec's benchmark prompt policy: do not repeat a short
+    prompt unless prompt concatenation is explicitly enabled.
+    """
+    if target_tokens <= 0:
+        raise ValueError(f"test_input_tokens must be positive, got {target_tokens}")
+    if prompt_index < 0 or prompt_index >= len(dataset):
+        raise ValueError(f"dataset_start_index={prompt_index} is out of range for {len(dataset)} prompts")
+
+    best_index = None
+    best_len = 0
+    for offset in range(len(dataset)):
+        candidate_index = (prompt_index + offset) % len(dataset)
+        candidate = dataset[candidate_index]
+        token_count = len(tokenizer.encode(candidate))
+        if token_count >= target_tokens:
+            return make_prompt_length(candidate, tokenizer, target_tokens), candidate_index, token_count
+        if token_count > best_len:
+            best_index = candidate_index
+            best_len = token_count
+
+    if not allow_concat:
+        raise ValueError(
+            f"No single dataset prompt has at least {target_tokens} tokens. "
+            f"Longest prompt has {best_len} tokens at index {best_index}."
+        )
+
+    pieces = []
+    cursor = prompt_index
+    token_count = 0
+    while token_count < target_tokens:
+        pieces.append(dataset[cursor % len(dataset)])
+        text = "\n\n".join(pieces)
+        token_count = len(tokenizer.encode(text))
+        cursor += 1
+        if cursor - prompt_index > len(dataset) * 2 and token_count == 0:
+            raise ValueError("Cannot build length-controlled prompt from empty dataset prompts")
+
+    return make_prompt_length("\n\n".join(pieces), tokenizer, target_tokens), prompt_index, token_count
 
 
 def log_one_line(data_dict, verbose, save_dir=None, exp_name=None, msg_type=None, stdout_whitelist=None):
@@ -367,6 +420,7 @@ def main(args):
         test_input_tokens=args.test_input_tokens,
         max_new_tokens=args.max_new_tokens,
         ignore_eos=args.ignore_eos,
+        test_allow_prompt_concat=args.test_allow_prompt_concat,
         max_budget=args.max_budget,
         max_branch_width=args.max_branch_width,
         branching=args.branching,
@@ -405,11 +459,30 @@ def main(args):
             for i in range(args.dataset_start_index, args.dataset_start_index + args.n_tests):
                 try:
                     prompt = dataset[i]
+                    selected_prompt_index = i
+                    source_prompt_tokens = None
+                    if args.test_input_tokens is not None:
+                        prompt, selected_prompt_index, source_prompt_tokens = select_length_controlled_dataset_prompt(
+                            dataset,
+                            spec_generator.tokenizer,
+                            args.test_input_tokens,
+                            prompt_index=i,
+                            allow_concat=args.test_allow_prompt_concat,
+                        )
                     inputs = spec_generator.tokenizer(prompt, return_tensors="pt").to(device)
                     with utils.Timing() as t:
                         spec_generator.target_engine.model.generate(**inputs, generation_config=gene_config)
                     log_one_line(
-                        {"prompt": i, "elapsed": round(t.elapsed, 3)}, save_dir=args.save_dir, exp_name=args.exp_name, verbose=args.verbose, msg_type="zero"
+                        {
+                            "prompt": i,
+                            "selected_prompt_index": selected_prompt_index,
+                            "source_prompt_tokens": source_prompt_tokens,
+                            "elapsed": round(t.elapsed, 3),
+                        },
+                        save_dir=args.save_dir,
+                        exp_name=args.exp_name,
+                        verbose=args.verbose,
+                        msg_type="zero",
                     )
                     total_time += t.elapsed
                 except RuntimeError:
@@ -546,6 +619,7 @@ if __name__ == "__main__":
     parser.add_argument("--replacement", help="draft model sampling with replacement", action="store_true")
     parser.add_argument("--repack", help="repack draft tree by combining identical node paths", action="store_true")
     parser.add_argument("--test-input-tokens", "--test_input_tokens", "--input-length", dest="test_input_tokens", default=None, type=int)
+    parser.add_argument("--test-allow-prompt-concat", "--test_allow_prompt_concat", dest="test_allow_prompt_concat", action="store_true")
     parser.add_argument("--max-new-tokens", "--max_new_tokens", "--output-length", dest="max_new_tokens", default=32, type=int)
     parser.add_argument("--ignore-eos", "--ignore_eos", dest="ignore_eos", action="store_true")
     parser.add_argument("--min_log_prob", help="min log proba threshold for added leafs; CAN SWEEP", default=None)

@@ -14,6 +14,12 @@ if TYPE_CHECKING:
 BENCHMARK_COMMANDS = {"run-benchmark", "run-benchmark-acc", "run-benchmark-agent"}
 
 
+def _default_specexec_prompts_file() -> str | None:
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    path = os.path.join(repo_root, "SpecExec", "specexec", "data", "oasst_prompts.json")
+    return path if os.path.isfile(path) else None
+
+
 def _configure_allocator_env(default: str = "expandable_segments:True") -> None:
     """Configure PyTorch allocator env vars.
 
@@ -184,6 +190,9 @@ def _build_settings_snapshot(
         "test_input_tokens": getattr(config, "test_input_tokens", None),
         "test_input_text": getattr(config, "test_input_text", None),
         "test_input_token_text": getattr(config, "test_input_token_text", None),
+        "test_prompts_file": getattr(config, "test_prompts_file", None),
+        "test_prompt_index": getattr(config, "test_prompt_index", None),
+        "test_allow_prompt_concat": getattr(config, "test_allow_prompt_concat", None),
         "test_prompt": getattr(config, "test_prompt", None),
         "ignore_eos": getattr(config, "ignore_eos", None),
         "do_sample": getattr(config, "do_sample", None),
@@ -387,6 +396,24 @@ def _build_full_parser(base_parser: argparse.ArgumentParser, default_config: Dic
         default=default_config.get("test_input_token_text", " hello"),
         help="Deprecated; length-controlled prompts now use natural text from --test-input-text or --test-prompt",
     )
+    full_parser.add_argument(
+        "--test-prompts-file",
+        type=str,
+        default=default_config.get("test_prompts_file") or _default_specexec_prompts_file(),
+        help="JSON prompt dataset used to select one prompt with enough tokens for --test-input-tokens",
+    )
+    full_parser.add_argument(
+        "--test-prompt-index",
+        type=int,
+        default=default_config.get("test_prompt_index", 0),
+        help="Starting prompt index when selecting from --test-prompts-file",
+    )
+    full_parser.add_argument(
+        "--test-allow-prompt-concat",
+        action=argparse.BooleanOptionalAction,
+        default=default_config.get("test_allow_prompt_concat", False),
+        help="Allow concatenating dataset prompts if no single prompt reaches --test-input-tokens",
+    )
     full_parser.add_argument("--test-prompt", type=str, default=default_config.get("test_prompt"))
     full_parser.add_argument(
         "--ignore-eos",
@@ -507,6 +534,9 @@ def _apply_cli_overrides(config: AppConfig, config_args: argparse.Namespace) -> 
     config.test_input_tokens = config_args.test_input_tokens
     config.test_input_text = config_args.test_input_text
     config.test_input_token_text = config_args.test_input_token_text
+    config.test_prompts_file = config_args.test_prompts_file
+    config.test_prompt_index = int(config_args.test_prompt_index)
+    config.test_allow_prompt_concat = bool(config_args.test_allow_prompt_concat)
     config.test_prompt = config_args.test_prompt
     config.ignore_eos = bool(config_args.ignore_eos)
     config.seed = int(config_args.seed)

@@ -35,12 +35,22 @@ def _build_input_ids(tokenizer, messages, device):
     return tokenizer(prompt, return_tensors="pt")["input_ids"].to(device)
 
 
-def _make_length_controlled_prompt(tokenizer, prompt_text, target_tokens):
+def _make_length_controlled_prompt(tokenizer, prompt_text, target_tokens, repeat_short=True):
     token_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
     if not token_ids:
         token_ids = tokenizer.encode(" ", add_special_tokens=False)
     if not token_ids:
         raise ValueError(f"Could not tokenize test prompt for {target_tokens} input tokens")
+
+    if len(token_ids) >= target_tokens:
+        input_ids = token_ids[:target_tokens]
+        prompt = tokenizer.decode(input_ids, skip_special_tokens=False)
+        return prompt, torch.tensor([input_ids], dtype=torch.long)
+
+    if not repeat_short:
+        raise ValueError(
+            f"Prompt has only {len(token_ids)} tokens; need at least {target_tokens} tokens"
+        )
 
     separator = "\n\n"
     repeat_ids = tokenizer.encode(separator + prompt_text, add_special_tokens=False)
@@ -56,21 +66,126 @@ def _make_length_controlled_prompt(tokenizer, prompt_text, target_tokens):
     return prompt, torch.tensor([input_ids], dtype=torch.long)
 
 
+def _prompt_from_item(item):
+    if isinstance(item, (list, tuple)) and len(item) >= 2:
+        return item[1]
+    if isinstance(item, dict):
+        for key in ("prompt", "text", "input", "question"):
+            value = item.get(key)
+            if isinstance(value, str):
+                return value
+    if isinstance(item, str):
+        return item
+    return None
+
+
+def _load_prompt_dataset(prompts_file):
+    with open(os.path.expanduser(prompts_file), encoding="utf-8") as f:
+        data = json.load(f)
+    prompts = []
+    for item in data:
+        prompt = _prompt_from_item(item)
+        if prompt:
+            prompts.append(prompt)
+    if not prompts:
+        raise ValueError(f"No usable prompts found in {prompts_file}")
+    return prompts
+
+
+def _select_length_controlled_dataset_prompt(tokenizer, prompts, target_tokens, prompt_index, allow_concat):
+    if prompt_index < 0 or prompt_index >= len(prompts):
+        raise ValueError(f"test_prompt_index={prompt_index} is out of range for {len(prompts)} prompts")
+
+    if target_tokens is None or target_tokens <= 0:
+        prompt = prompts[prompt_index]
+        token_count = len(tokenizer.encode(prompt, add_special_tokens=False))
+        return prompt, prompt_index, token_count
+
+    best_index = None
+    best_len = 0
+    for offset in range(len(prompts)):
+        candidate_index = (prompt_index + offset) % len(prompts)
+        candidate = prompts[candidate_index]
+        token_count = len(tokenizer.encode(candidate, add_special_tokens=False))
+        if token_count >= target_tokens:
+            prompt, _ = _make_length_controlled_prompt(
+                tokenizer, candidate, target_tokens, repeat_short=False
+            )
+            return prompt, candidate_index, token_count
+        if token_count > best_len:
+            best_index = candidate_index
+            best_len = token_count
+
+    if not allow_concat:
+        raise ValueError(
+            f"No single dataset prompt has at least {target_tokens} tokens. "
+            f"Longest prompt has {best_len} tokens at index {best_index}."
+        )
+
+    pieces = []
+    cursor = prompt_index
+    token_count = 0
+    while token_count < target_tokens:
+        pieces.append(prompts[cursor % len(prompts)])
+        text = "\n\n".join(pieces)
+        token_count = len(tokenizer.encode(text, add_special_tokens=False))
+        cursor += 1
+        if cursor - prompt_index > len(prompts) * 2 and token_count == 0:
+            raise ValueError("Cannot build length-controlled prompt from empty dataset prompts")
+
+    prompt, _ = _make_length_controlled_prompt(tokenizer, "\n\n".join(pieces), target_tokens)
+    return prompt, prompt_index, token_count
+
+
 def _prepare_test_input(tokenizer, args, input_message):
     n_input_tokens = getattr(args, "test_input_tokens", None)
+    prompt_meta = {}
     if n_input_tokens is not None:
         n_input_tokens = int(n_input_tokens)
         if n_input_tokens <= 0:
             raise ValueError("test_input_tokens must be a positive integer")
-        prompt_source = getattr(args, "test_input_text", None) or input_message
-        prompt, input_ids = _make_length_controlled_prompt(tokenizer, prompt_source, n_input_tokens)
-        return input_message, prompt, input_ids.to(args.device), None
+
+        if getattr(args, "test_input_text", None):
+            prompt_source = args.test_input_text
+            prompt, input_ids = _make_length_controlled_prompt(tokenizer, prompt_source, n_input_tokens)
+            prompt_meta = {
+                "test_input_source": "test_input_text",
+                "selected_prompt_index": "custom",
+                "source_prompt_tokens": len(tokenizer.encode(prompt_source, add_special_tokens=False)),
+            }
+        elif getattr(args, "test_prompts_file", None):
+            prompts = _load_prompt_dataset(args.test_prompts_file)
+            prompt, selected_index, source_prompt_tokens = _select_length_controlled_dataset_prompt(
+                tokenizer=tokenizer,
+                prompts=prompts,
+                target_tokens=n_input_tokens,
+                prompt_index=int(getattr(args, "test_prompt_index", 0) or 0),
+                allow_concat=bool(getattr(args, "test_allow_prompt_concat", False)),
+            )
+            input_ids = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+            prompt_meta = {
+                "test_input_source": "test_prompts_file",
+                "test_prompts_file": args.test_prompts_file,
+                "selected_prompt_index": selected_index,
+                "source_prompt_tokens": source_prompt_tokens,
+                "test_allow_prompt_concat": bool(getattr(args, "test_allow_prompt_concat", False)),
+            }
+        else:
+            prompt_source = input_message
+            prompt, input_ids = _make_length_controlled_prompt(tokenizer, prompt_source, n_input_tokens)
+            prompt_meta = {
+                "test_input_source": "test_prompt",
+                "selected_prompt_index": None,
+                "source_prompt_tokens": len(tokenizer.encode(prompt_source, add_special_tokens=False)),
+            }
+
+        return input_message, prompt, input_ids.to(args.device), None, prompt_meta
 
     messages = [{"role": "user", "content": input_message}]
     tokenizer.use_default_system_prompt = True
     input_ids = _build_input_ids(tokenizer, messages, args.device)
     prompt = tokenizer.decode(input_ids[0])
-    return input_message, prompt, input_ids, None
+    return input_message, prompt, input_ids, None, {"test_input_source": "chat_template"}
 
 
 def _generate_kwargs(args, input_ids, past_kv, draft_past_kv):
@@ -120,7 +235,7 @@ def main(builder):
             for i in trange(args.warmup_iter, desc='Warming up'):
                 warmup_message = "Write an essay about large language models."
                 with nvtx.annotate("Warm up"):
-                    _, _, input_ids, _ = _prepare_test_input(tokenizer, args, warmup_message)
+                    _, _, input_ids, _, _ = _prepare_test_input(tokenizer, args, warmup_message)
                     with sdpa_kernel(backends=[SDPBackend.MATH]):
                         generator.generate(
                             input_ids,
@@ -138,7 +253,7 @@ def main(builder):
         args.test_prompt
         or "Do you know what is Beyblade? What is the best strategy to build the strongest Beyblade?"
     )
-    input_message, prompt, input_ids, synthetic_token_id = _prepare_test_input(tokenizer, args, input_message)
+    input_message, prompt, input_ids, synthetic_token_id, prompt_meta = _prepare_test_input(tokenizer, args, input_message)
     
     start_event = torch.cuda.Event(enable_timing=True)
     end_event = torch.cuda.Event(enable_timing=True)
@@ -194,6 +309,7 @@ def main(builder):
         "test_input_tokens": getattr(args, "test_input_tokens", None),
         "test_input_text": getattr(args, "test_input_text", None),
         "test_input_token_text": getattr(args, "test_input_token_text", None),
+        **prompt_meta,
         "ignore_eos": bool(getattr(args, "ignore_eos", False)),
         "elapsed_time": float(total_time_s),
         "elapsed_time_wall": float(wall_total_s),

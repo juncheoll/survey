@@ -307,9 +307,37 @@ class SDProfilingMixin:
             )
         
         # save profile data
+        total_verify_len = int(sum(self.profile_data["total_len"]))
+        total_accept_len = int(sum(self.profile_data["accept_len"]))
+        acceptance_rate = (
+            float(total_accept_len / total_verify_len)
+            if total_verify_len > 0
+            else 0.0
+        )
+        full_accept_steps = int(
+            sum(
+                int(total_len > 0 and accept_len == total_len)
+                for total_len, accept_len in zip(
+                    self.profile_data["total_len"],
+                    self.profile_data["accept_len"],
+                )
+            )
+        )
+        verify_steps = len(self.profile_data["total_len"])
+        full_accept_rate = (
+            float(full_accept_steps / verify_steps)
+            if verify_steps > 0
+            else 0.0
+        )
+
         self.profile_data["total_sampled"] = total_sampled
         self.profile_data["total_iterations"] = total_iterations
         self.profile_data["average_sampled"] = avg_sampled
+        self.profile_data["total_verify_len"] = total_verify_len
+        self.profile_data["total_accept_len"] = total_accept_len
+        self.profile_data["acceptance_rate"] = acceptance_rate
+        self.profile_data["full_accept_steps"] = full_accept_steps
+        self.profile_data["full_accept_rate"] = full_accept_rate
         if self.out_dir is not None:
             with open(out_path, "w") as f:
                 json.dump(self.profile_data, f)
@@ -324,6 +352,21 @@ class SDProfilingMixin:
                 "avg_target_time": avg_target_s,
                 "avg_verify_time": avg_verify_s,
                 "avg_sampled": avg_sampled,
+                "avg_accept_len": (
+                    float(total_accept_len / verify_steps)
+                    if verify_steps > 0
+                    else 0.0
+                ),
+                "avg_verify_len": (
+                    float(total_verify_len / verify_steps)
+                    if verify_steps > 0
+                    else 0.0
+                ),
+                "acceptance_rate": acceptance_rate,
+                "total_accept_len": total_accept_len,
+                "total_verify_len": total_verify_len,
+                "full_accept_steps": full_accept_steps,
+                "full_accept_rate": full_accept_rate,
                 "n_iter": total_iterations,
                 "n_tokens": n_tokens,
                 "elapsed_time": elapsed_time_s,

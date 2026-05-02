@@ -25,6 +25,9 @@ class AppConfig:
     test_input_tokens: Optional[int] = None
     test_input_text: Optional[str] = None
     test_input_token_text: str = " hello"
+    test_prompts_file: Optional[str] = None
+    test_prompt_index: int = 0
+    test_allow_prompt_concat: bool = False
     test_prompt: Optional[str] = None
     ignore_eos: bool = False
     do_sample: bool = False

@@ -30,3 +30,17 @@ cd SpecExec/specexec
   --offload \
   --exp_name SX_llama13b_1024_256
 ```
+
+
+```
+python run_exp.py \
+  --model_0 TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
+  --model_1 meta-llama/Llama-2-7b-chat-hf \
+  --dataset oasst \
+  --dataset_start_index 0 \
+  --n_tests 1 \
+  --offload \
+  --test-input-tokens 1024 \
+  --max-new-tokens 256 \
+  --ignore-eos
+  ```

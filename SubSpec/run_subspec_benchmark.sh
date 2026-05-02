@@ -38,6 +38,9 @@ SUBSPEC_CONFIG_TEMPLATE_VRAM="${SUBSPEC_CONFIG_TEMPLATE_VRAM:-$DEFAULT_CONFIG_TE
 PYTHON_BIN="${PYTHON_BIN:-python}"
 SPECEXEC_PROMPTS_FILE="${SPECEXEC_PROMPTS_FILE:-$SCRIPT_DIR/../SpecExec/specexec/data/oasst_prompts.json}"
 TEST_INPUT_TEXT="${TEST_INPUT_TEXT:-}"
+TEST_PROMPTS_FILE="${TEST_PROMPTS_FILE:-$SPECEXEC_PROMPTS_FILE}"
+TEST_PROMPT_INDEX="${TEST_PROMPT_INDEX:-0}"
+TEST_ALLOW_PROMPT_CONCAT="${TEST_ALLOW_PROMPT_CONCAT:-0}"
 
 if [[ "$SUBSPEC_SAFE_MODE" != "0" ]]; then
   SUBSPEC_COMPILE_MODE="${SUBSPEC_COMPILE_MODE:-none}"
@@ -79,31 +82,13 @@ if [[ ! -d "$SUBSPEC_DIR" ]]; then
   exit 1
 fi
 
-load_default_test_input_text() {
-  local prompts_file="$1"
-  [[ -f "$prompts_file" ]] || return 1
-  "$PYTHON_BIN" - "$prompts_file" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as f:
-    data = json.load(f)
-
-first = data[0]
-if isinstance(first, (list, tuple)) and len(first) >= 2:
-    print(first[1], end="")
-else:
-    print(first, end="")
-PY
-}
-
-if [[ -z "$TEST_INPUT_TEXT" ]]; then
-  if TEST_INPUT_TEXT="$(load_default_test_input_text "$SPECEXEC_PROMPTS_FILE")"; then
-    echo "[setup] test input text: SpecExec OASST prompt[0] from $SPECEXEC_PROMPTS_FILE"
-  else
-    echo "[setup] SpecExec prompt file not found; falling back to config test_prompt"
-    TEST_INPUT_TEXT=""
-  fi
+if [[ -n "$TEST_INPUT_TEXT" ]]; then
+  echo "[setup] test input text: custom TEST_INPUT_TEXT"
+elif [[ -f "$TEST_PROMPTS_FILE" ]]; then
+  echo "[setup] test prompts file: $TEST_PROMPTS_FILE"
+else
+  echo "[setup] test prompts file not found; falling back to config test_prompt: $TEST_PROMPTS_FILE"
+  TEST_PROMPTS_FILE=""
 fi
 
 expand_path() {
@@ -203,7 +188,9 @@ ensure_model_cached() {
   echo "# model_sizes: ${MODEL_SIZES[*]}"
   echo "# vram_limits_gb: ${VRAM_LIMITS[*]}"
   echo "# test_input_tokens: $TEST_INPUT_TOKENS"
-  echo "# test_input_text_source: ${SPECEXEC_PROMPTS_FILE}"
+  echo "# test_prompts_file: ${TEST_PROMPTS_FILE:-<none>}"
+  echo "# test_prompt_index: $TEST_PROMPT_INDEX"
+  echo "# test_allow_prompt_concat: $TEST_ALLOW_PROMPT_CONCAT"
   echo "# max_new_tokens: $MAX_NEW_TOKENS"
   echo "# max_length: $MAX_LENGTH"
   echo "# ignore_eos: $IGNORE_EOS"
@@ -304,6 +291,12 @@ run_one() {
 
   if [[ -n "$TEST_INPUT_TEXT" ]]; then
     cmd+=(--test-input-text "$TEST_INPUT_TEXT")
+  elif [[ -n "$TEST_PROMPTS_FILE" ]]; then
+    cmd+=(--test-prompts-file "$TEST_PROMPTS_FILE")
+    cmd+=(--test-prompt-index "$TEST_PROMPT_INDEX")
+    if [[ "$TEST_ALLOW_PROMPT_CONCAT" != "0" ]]; then
+      cmd+=(--test-allow-prompt-concat)
+    fi
   fi
 
   if [[ "$IGNORE_EOS" != "0" ]]; then
