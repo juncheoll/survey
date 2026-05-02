@@ -17,10 +17,25 @@ DEFAULT_COMPRESS_ONLY_MODELS=(
 )
 
 MODELS=("${DEFAULT_MODELS[@]}")
-if [[ "$#" -gt 0 ]]; then
-  MODELS=("$@")
-fi
 COMPRESS_ONLY_MODELS=("${DEFAULT_COMPRESS_ONLY_MODELS[@]}")
+
+if [[ -n "${MODEL_LIST:-}" ]]; then
+  # shellcheck disable=SC2206
+  MODELS=($MODEL_LIST)
+  if [[ -z "${COMPRESS_ONLY_MODEL_LIST+x}" ]]; then
+    COMPRESS_ONLY_MODELS=()
+  fi
+elif [[ "$#" -gt 0 ]]; then
+  MODELS=("$@")
+  if [[ -z "${COMPRESS_ONLY_MODEL_LIST+x}" ]]; then
+    COMPRESS_ONLY_MODELS=()
+  fi
+fi
+
+if [[ -n "${COMPRESS_ONLY_MODEL_LIST+x}" ]]; then
+  # shellcheck disable=SC2206
+  COMPRESS_ONLY_MODELS=($COMPRESS_ONLY_MODEL_LIST)
+fi
 
 MODEL_PATH="${MODEL_PATH:-_DUMMY_}"
 GPU_BATCH_SIZES="${GPU_BATCH_SIZES:-1 2 4 8 16 32}"

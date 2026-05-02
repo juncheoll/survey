@@ -8,6 +8,9 @@ cd "$SCRIPT_DIR"
 
 FRAMEWORKS="${FRAMEWORKS:-FlexGen ZeRO-Inference SubSpec}"
 STOP_ON_FAILURE="${STOP_ON_FAILURE:-0}"
+MODEL_LIST="${MODEL_LIST:-}"
+FLEXGEN_MODEL_LIST="${FLEXGEN_MODEL_LIST:-$MODEL_LIST}"
+ZERO_INFERENCE_MODEL_LIST="${ZERO_INFERENCE_MODEL_LIST:-$MODEL_LIST}"
 
 if [[ -z "${LOG_DIR:-}" ]]; then
   if [[ -d "/logs" && -w "/logs" ]]; then
@@ -27,6 +30,9 @@ mkdir -p "$RUN_LOG_DIR"
   echo "# run_id: $RUN_ID"
   echo "# started_at: $(date -Iseconds)"
   echo "# frameworks: $FRAMEWORKS"
+  echo "# model_list: ${MODEL_LIST:-<default>}"
+  echo "# flexgen_model_list: ${FLEXGEN_MODEL_LIST:-<default>}"
+  echo "# zero_inference_model_list: ${ZERO_INFERENCE_MODEL_LIST:-<default>}"
   printf "started_at\tended_at\tduration_sec\tframework\tstatus\texit_code\tstdout_log\tframework_log_dir\n"
 } > "$SUMMARY_LOG"
 
@@ -89,8 +95,26 @@ run_framework() {
     echo "# framework: $framework"
     echo "# script: $script_path"
     echo "# framework_log_dir: $framework_log_dir"
+    case "$framework" in
+      FlexGen)
+        echo "# model_list: ${FLEXGEN_MODEL_LIST:-<default>}"
+        ;;
+      ZeRO-Inference)
+        echo "# model_list: ${ZERO_INFERENCE_MODEL_LIST:-<default>}"
+        ;;
+    esac
     echo
-    LOG_DIR="$framework_log_dir" "$script_path"
+    case "$framework" in
+      FlexGen)
+        LOG_DIR="$framework_log_dir" MODEL_LIST="$FLEXGEN_MODEL_LIST" "$script_path"
+        ;;
+      ZeRO-Inference)
+        LOG_DIR="$framework_log_dir" MODEL_LIST="$ZERO_INFERENCE_MODEL_LIST" "$script_path"
+        ;;
+      *)
+        LOG_DIR="$framework_log_dir" "$script_path"
+        ;;
+    esac
   } > "$stdout_log" 2>&1
   exit_code=$?
 

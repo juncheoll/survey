@@ -15,7 +15,10 @@ DEFAULT_MODELS=(
 )
 
 MODELS=("${DEFAULT_MODELS[@]}")
-if [[ "$#" -gt 0 ]]; then
+if [[ -n "${MODEL_LIST:-}" ]]; then
+  # shellcheck disable=SC2206
+  MODELS=($MODEL_LIST)
+elif [[ "$#" -gt 0 ]]; then
   MODELS=("$@")
 fi
 

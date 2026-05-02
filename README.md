@@ -38,6 +38,10 @@ Runs the single-node benchmark scripts for FlexGen, ZeRO-Inference, and SubSpec 
 Useful overrides:
 - `FRAMEWORKS="FlexGen SubSpec"`: select frameworks.
 - `FRAMEWORKS="PowerInfer"`: run only PowerInfer.
+- `MODEL_LIST="meta-llama/Llama-2-7b-hf huggyllama/llama-30b"`: run only these models for FlexGen and ZeRO-Inference.
+- `FLEXGEN_MODEL_LIST="meta-llama/Llama-2-13b-hf"`: model list only for FlexGen.
+- `ZERO_INFERENCE_MODEL_LIST="meta-llama/Llama-2-7b-hf"`: model list only for ZeRO-Inference.
+- `COMPRESS_ONLY_MODEL_LIST="meta-llama/Llama-2-70b-hf"`: extra FlexGen models to run only when `COMPRESS_WEIGHT_MODES` includes `on`.
 - `STOP_ON_FAILURE=1`: stop after the first failed framework.
 - `LOG_DIR=/path/to/logs`: change orchestration log location.
 

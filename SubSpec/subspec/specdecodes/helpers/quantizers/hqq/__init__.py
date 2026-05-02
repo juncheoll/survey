@@ -26,9 +26,19 @@ class HqqQuantizer:
         gemlite_autotune = os.environ.get("SUBSPEC_GEMLITE_AUTOTUNE") or os.environ.get("GEMLITE_AUTOTUNE")
         gemlite_packing = os.environ.get("SUBSPEC_GEMLITE_PACKING_BITWIDTH")
         gemlite_kernel_caching = os.environ.get("SUBSPEC_GEMLITE_KERNEL_CACHING")
-        if any([gemlite_cfg, gemlite_autotune, gemlite_packing, gemlite_kernel_caching]):
+        gemlite_reset_config = os.environ.get("SUBSPEC_GEMLITE_RESET_CONFIG")
+        if any([gemlite_cfg, gemlite_autotune, gemlite_packing, gemlite_kernel_caching, gemlite_reset_config]):
             try:
                 import gemlite  # type: ignore
+
+                if gemlite_reset_config is not None:
+                    try:
+                        val = str(gemlite_reset_config).strip().lower()
+                        if val in {"1", "true", "yes", "y", "on"}:
+                            gemlite.reset_config()
+                            logging.info("GemLite cached kernel config reset.")
+                    except Exception as e:
+                        logging.warning(f"Failed to reset GemLite cached kernel config: {e}")
 
                 if gemlite_autotune:
                     try:
@@ -72,6 +82,13 @@ class HqqQuantizer:
         # Supported values:
         # - SUBSPEC_GEMLITE_ACTIVATIONS=fp16 (default): weight-only, uses prepare_for_inference(..., backend="gemlite")
         # - SUBSPEC_GEMLITE_ACTIVATIONS=fp8: FP8 dynamic activations + Wn weights via gemlite.helper.A8Wn_dynamic
+        hqq_backend = (os.environ.get("SUBSPEC_HQQ_BACKEND") or "gemlite").strip().lower()
+        if hqq_backend in {"pytorch", "torch"}:
+            logging.warning("Using HQQ PyTorch backend; GemLite inference patching is disabled.")
+            return
+        if hqq_backend != "gemlite":
+            logging.warning(f"Unsupported SUBSPEC_HQQ_BACKEND={hqq_backend}; falling back to GemLite.")
+
         act_mode = (os.environ.get("SUBSPEC_GEMLITE_ACTIVATIONS") or "fp16").strip().lower()
         if act_mode in {"fp8", "a8", "a8wn"}:
             try:
