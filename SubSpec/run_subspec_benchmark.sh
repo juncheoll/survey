@@ -10,15 +10,15 @@ CONFIG_DIR="$SUBSPEC_DIR/configs/exp_offloading"
 cd "$SCRIPT_DIR"
 
 DEFAULT_MODEL_SIZES=(7b 13b 30b)
-DEFAULT_VRAM_LIMITS=(10 12 16)
 DEFAULT_CONFIG_TEMPLATE_VRAM=16
 
 # Positional args select VRAM limits, e.g. `./run_subspec_benchmark.sh 10 16`.
+# By default, run without a VRAM cap.
 if [[ "$#" -gt 0 ]]; then
   VRAM_LIMITS=("$@")
 else
   # shellcheck disable=SC2206
-  VRAM_LIMITS=(${VRAM_LIMITS:-${DEFAULT_VRAM_LIMITS[*]}})
+  VRAM_LIMITS=(${VRAM_LIMITS:-none})
 fi
 
 # shellcheck disable=SC2206
@@ -226,17 +226,23 @@ cd "$SUBSPEC_DIR"
 
 run_one() {
   local model_size="$1"
-  local vram_limit="${2%gb}"
+  local requested_vram="${2:-none}"
+  local vram_limit="${requested_vram%gb}"
   vram_limit="${vram_limit%GB}"
-  local config_rel="configs/exp_offloading/subspec_sd_llama_${model_size}_vram_${vram_limit}gb.yaml"
-  local config_abs="$CONFIG_DIR/subspec_sd_llama_${model_size}_vram_${vram_limit}gb.yaml"
+  local has_vram_limit=1
+  if [[ -z "$vram_limit" || "$vram_limit" == "none" || "$vram_limit" == "None" || "$vram_limit" == "null" || "$vram_limit" == "unlimited" ]]; then
+    has_vram_limit=0
+    vram_limit="none"
+  fi
   local template_vram="${SUBSPEC_CONFIG_TEMPLATE_VRAM%gb}"
   template_vram="${template_vram%GB}"
+  local config_rel="configs/exp_offloading/subspec_sd_llama_${model_size}_vram_${template_vram}gb.yaml"
+  local config_abs="$CONFIG_DIR/subspec_sd_llama_${model_size}_vram_${template_vram}gb.yaml"
   local template_config_rel="configs/exp_offloading/subspec_sd_llama_${model_size}_vram_${template_vram}gb.yaml"
   local template_config_abs="$CONFIG_DIR/subspec_sd_llama_${model_size}_vram_${template_vram}gb.yaml"
   local selected_config_rel="$config_rel"
   local selected_config_abs="$config_abs"
-  local stdout_log="$RUN_LOG_DIR/llama_${model_size}_vram_${vram_limit}gb.stdout.log"
+  local stdout_log="$RUN_LOG_DIR/llama_${model_size}_vram_${vram_limit}.stdout.log"
   local started_at
   local started_sec
   local ended_at
@@ -275,11 +281,14 @@ run_one() {
   cmd=(
     "$PYTHON_BIN" -m run.main
     --config "$selected_config_rel"
-    --vram-limit-gb "$vram_limit"
     --max-length "$MAX_LENGTH"
     --test-input-tokens "$TEST_INPUT_TOKENS"
     --max-new-tokens "$MAX_NEW_TOKENS"
   )
+
+  if [[ "$has_vram_limit" -eq 1 ]]; then
+    cmd+=(--vram-limit-gb "$vram_limit")
+  fi
 
   if [[ -n "$SUBSPEC_COMPILE_MODE" ]]; then
     cmd+=(--compile-mode "$SUBSPEC_COMPILE_MODE")
@@ -306,13 +315,13 @@ run_one() {
   started_at="$(date -Iseconds)"
   started_sec="$(date +%s)"
 
-  echo "[run] llama_${model_size} vram=${vram_limit}gb"
+  echo "[run] llama_${model_size} vram=${vram_limit}"
   {
     echo "# started_at: $started_at"
-    echo "# requested_config: $config_rel"
+    echo "# requested_vram_limit_gb: $vram_limit"
     echo "# selected_config: $selected_config_rel"
-    if [[ "$selected_config_rel" != "$config_rel" ]]; then
-      echo "# note: requested config was not found; using template config and overriding --vram-limit-gb $vram_limit"
+    if [[ "$has_vram_limit" -eq 0 ]]; then
+      echo "# note: running without --vram-limit-gb"
     fi
     printf "# command:"
     printf " %q" "${cmd[@]}"
@@ -341,11 +350,11 @@ run_one() {
   if [[ "$exit_code" -eq 0 ]]; then
     status="success"
     success=$((success + 1))
-    echo "[run] success: llama_${model_size} vram=${vram_limit}gb (${duration_sec}s)"
+    echo "[run] success: llama_${model_size} vram=${vram_limit} (${duration_sec}s)"
   else
     status="failed"
     failed=$((failed + 1))
-    echo "[run] failed: llama_${model_size} vram=${vram_limit}gb (${duration_sec}s, exit_code=$exit_code)"
+    echo "[run] failed: llama_${model_size} vram=${vram_limit} (${duration_sec}s, exit_code=$exit_code)"
   fi
 
   printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \

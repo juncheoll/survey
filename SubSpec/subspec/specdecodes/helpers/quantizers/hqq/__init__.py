@@ -19,6 +19,9 @@ class HqqQuantizer:
     def quantize_model(cls, model, quant_config, compute_dtype, device):
         logging.info("Quantizing model with HqqQuantizer")
 
+        def phase(message):
+            logging.info(f"[HqqQuantizer] {message}")
+
         # Optional GemLite tuning knobs (no-op unless env vars are set).
         # These primarily reduce warmup/autotune overhead and can improve steady-state
         # performance depending on GPU + shapes.
@@ -72,8 +75,11 @@ class HqqQuantizer:
             except Exception as e:
                 logging.warning(f"GemLite tuning requested but gemlite import/config failed: {e}")
 
+        phase("HQQ quantization start")
         AutoHQQHFModel.quantize_model(model, quant_config, compute_dtype=compute_dtype, device=device)
+        phase("HQQ quantization done")
         HQQLinear.set_backend(HQQBackend.PYTORCH)
+        phase("HQQLinear backend set to PYTORCH")
 
         # By default, HQQ's gemlite backend patches HQQLinear -> GemLite A16Wn (FP16 activations, Wn weights).
         # GemLite activation quant (e.g. A8Wn_dynamic) is not wired through HQQ's backend in gemlite==0.4.6,
@@ -128,10 +134,13 @@ class HqqQuantizer:
 
                 _patch_module(model)
                 logging.info("Patched HQQLinear layers with GemLite A8Wn_dynamic (FP8 dynamic activations).")
+                phase("GemLite FP8 patch done")
                 return
             except Exception as e:
                 logging.warning(
                     f"SUBSPEC_GEMLITE_ACTIVATIONS={act_mode} requested but GemLite FP8 patching failed; falling back to A16Wn weight-only. Error: {e}"
                 )
 
+        phase("GemLite prepare_for_inference start")
         prepare_for_inference(model, backend="gemlite")
+        phase("GemLite prepare_for_inference done")

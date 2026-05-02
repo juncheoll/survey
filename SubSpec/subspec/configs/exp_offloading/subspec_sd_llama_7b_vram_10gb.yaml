@@ -1,5 +1,4 @@
 method: subspec_sd
-vram_limit_gb: 10
 seed: 0
 device: cuda:0
 max_length: 2048

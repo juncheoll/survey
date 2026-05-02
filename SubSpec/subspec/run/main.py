@@ -243,6 +243,16 @@ def _normalize_compile_mode(value):
     return value
 
 
+def _normalize_optional_float(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if value.lower() in {"none", "null", "unlimited", ""}:
+            return None
+    return float(value)
+
+
 def _apply_yaml_overrides(default_config: Dict[str, Any], yaml_config: Dict[str, Any]) -> Dict[str, Any]:
     if not yaml_config:
         return dict(default_config)
@@ -386,7 +396,7 @@ def _build_full_parser(base_parser: argparse.ArgumentParser, default_config: Dic
     )
     full_parser.add_argument("--seed", type=int, default=default_config.get("seed", 0))
     full_parser.add_argument("--device", type=str, default="cuda:0")
-    full_parser.add_argument("--vram-limit-gb", type=float, default=default_config.get("vram_limit_gb", None))
+    full_parser.add_argument("--vram-limit-gb", type=str, default=default_config.get("vram_limit_gb", None))
     full_parser.add_argument(
         "--hardware-safe-mode",
         type=str,
@@ -501,7 +511,7 @@ def _apply_cli_overrides(config: AppConfig, config_args: argparse.Namespace) -> 
     config.ignore_eos = bool(config_args.ignore_eos)
     config.seed = int(config_args.seed)
     config.device = config_args.device
-    config.vram_limit_gb = config_args.vram_limit_gb
+    config.vram_limit_gb = _normalize_optional_float(config_args.vram_limit_gb)
     config.hardware_safe_mode = config_args.hardware_safe_mode
     config.compile_mode = _normalize_compile_mode(config_args.compile_mode)
     config.temperature = float(config_args.temperature)
