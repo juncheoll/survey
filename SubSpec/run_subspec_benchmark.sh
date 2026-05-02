@@ -28,9 +28,21 @@ MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-256}"
 MAX_LENGTH="${MAX_LENGTH:-$((TEST_INPUT_TOKENS + MAX_NEW_TOKENS))}"
 IGNORE_EOS="${IGNORE_EOS:-1}"
 DOWNLOAD_MODELS="${DOWNLOAD_MODELS:-1}"
+SUBSPEC_SAFE_MODE="${SUBSPEC_SAFE_MODE:-0}"
+SUBSPEC_COMPILE_MODE="${SUBSPEC_COMPILE_MODE:-}"
+SUBSPEC_CACHE_IMPLEMENTATION="${SUBSPEC_CACHE_IMPLEMENTATION:-}"
+SUBSPEC_WARMUP_ITER="${SUBSPEC_WARMUP_ITER:-}"
+SUBSPEC_HQQ_BACKEND="${SUBSPEC_HQQ_BACKEND:-}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 SPECEXEC_PROMPTS_FILE="${SPECEXEC_PROMPTS_FILE:-$SCRIPT_DIR/../SpecExec/specexec/data/oasst_prompts.json}"
 TEST_INPUT_TEXT="${TEST_INPUT_TEXT:-}"
+
+if [[ "$SUBSPEC_SAFE_MODE" != "0" ]]; then
+  SUBSPEC_COMPILE_MODE="${SUBSPEC_COMPILE_MODE:-none}"
+  SUBSPEC_CACHE_IMPLEMENTATION="${SUBSPEC_CACHE_IMPLEMENTATION:-dynamic}"
+  SUBSPEC_WARMUP_ITER="${SUBSPEC_WARMUP_ITER:-0}"
+  SUBSPEC_HQQ_BACKEND="${SUBSPEC_HQQ_BACKEND:-pytorch}"
+fi
 
 if [[ -z "${LOG_DIR:-}" ]]; then
   LOG_DIR="$SCRIPT_DIR/logs/subspec_benchmark"
@@ -194,6 +206,11 @@ ensure_model_cached() {
   echo "# max_length: $MAX_LENGTH"
   echo "# ignore_eos: $IGNORE_EOS"
   echo "# download_models: $DOWNLOAD_MODELS"
+  echo "# safe_mode: $SUBSPEC_SAFE_MODE"
+  echo "# compile_mode: ${SUBSPEC_COMPILE_MODE:-<config>}"
+  echo "# cache_implementation: ${SUBSPEC_CACHE_IMPLEMENTATION:-<config>}"
+  echo "# warmup_iter: ${SUBSPEC_WARMUP_ITER:-<config>}"
+  echo "# hqq_backend: ${SUBSPEC_HQQ_BACKEND:-<default>}"
   printf "started_at\tended_at\tduration_sec\tmodel_size\tvram_limit_gb\tconfig\tstatus\texit_code\tstdout_log\texperiment_log_dir\n"
 } > "$SUMMARY_LOG"
 
@@ -248,6 +265,18 @@ run_one() {
     --max-new-tokens "$MAX_NEW_TOKENS"
   )
 
+  if [[ -n "$SUBSPEC_COMPILE_MODE" ]]; then
+    cmd+=(--compile-mode "$SUBSPEC_COMPILE_MODE")
+  fi
+
+  if [[ -n "$SUBSPEC_CACHE_IMPLEMENTATION" ]]; then
+    cmd+=(--cache-implementation "$SUBSPEC_CACHE_IMPLEMENTATION")
+  fi
+
+  if [[ -n "$SUBSPEC_WARMUP_ITER" ]]; then
+    cmd+=(--warmup-iter "$SUBSPEC_WARMUP_ITER")
+  fi
+
   if [[ -n "$TEST_INPUT_TEXT" ]]; then
     cmd+=(--test-input-text "$TEST_INPUT_TEXT")
   fi
@@ -274,7 +303,11 @@ run_one() {
       echo "[run] skipped because preflight failed with exit_code=$preflight_exit_code" >&2
       (exit "$preflight_exit_code")
     else
-      "${cmd[@]}"
+      if [[ -n "$SUBSPEC_HQQ_BACKEND" ]]; then
+        SUBSPEC_HQQ_BACKEND="$SUBSPEC_HQQ_BACKEND" "${cmd[@]}"
+      else
+        "${cmd[@]}"
+      fi
     fi
   } > "$stdout_log" 2>&1
   exit_code=$?
