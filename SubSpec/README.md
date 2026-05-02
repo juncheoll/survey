@@ -10,7 +10,7 @@ python -m run.main \
 SUBSPEC_HQQ_BACKEND=pytorch \
 python -m run.main \
   --config configs/exp_offloading/subspec_sd_llama_7b_vram_16gb.yaml \
-  --vram-limit-gb 14 \
+  --vram-limit-gb 24 \
   --test-input-tokens 1024 \
   --max-new-tokens 256 \
   --ignore-eos \

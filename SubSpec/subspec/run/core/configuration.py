@@ -42,6 +42,7 @@ class AppConfig:
     cache_implementation: str = "dynamic"
     warmup_iter: int = 0
     compile_mode: Optional[str] = None
+    hardware_safe_mode: str = "auto"
     
     # Profiling
     generator_profiling: bool = True

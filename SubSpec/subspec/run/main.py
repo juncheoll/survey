@@ -55,6 +55,61 @@ def _configure_runtime_environment() -> None:
     _configure_allocator_env(default="expandable_segments:True")
 
 
+def _cuda_device_name(device: Any) -> str | None:
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return None
+
+        if isinstance(device, int):
+            index = device
+        elif isinstance(device, str) and device.startswith("cuda"):
+            index = torch.device(device).index
+        else:
+            index = None
+
+        if index is None:
+            index = torch.cuda.current_device()
+        return torch.cuda.get_device_properties(index).name
+    except Exception:
+        return None
+
+
+def _apply_hardware_safety_overrides(config: "AppConfig") -> None:
+    mode = str(getattr(config, "hardware_safe_mode", "auto") or "auto").strip().lower()
+    if mode in {"0", "false", "no", "off", "disable", "disabled"}:
+        return
+
+    device_name = _cuda_device_name(getattr(config, "device", "cuda:0")) or ""
+    is_4090 = "4090" in device_name.lower()
+    should_apply = mode in {"1", "true", "yes", "on", "enable", "enabled"} or (
+        mode == "auto" and is_4090
+    )
+    if not should_apply:
+        return
+
+    # Keep GemLite enabled by default. On RTX 4090, the packaged 4090 autotune
+    # cache can be unstable for some shapes, so start from default Triton
+    # configs unless the user explicitly provided GemLite settings.
+    os.environ.setdefault("SUBSPEC_GEMLITE_RESET_CONFIG", "1")
+    os.environ.setdefault("SUBSPEC_GEMLITE_AUTOTUNE", "default")
+    os.environ.setdefault("SUBSPEC_GEMLITE_KERNEL_CACHING", "0")
+
+    if getattr(config, "compile_mode", None) is not None:
+        config.compile_mode = None
+    if int(getattr(config, "warmup_iter", 0) or 0) > 0:
+        config.warmup_iter = 0
+
+    print(
+        "[hardware-safe] enabled"
+        f" device={device_name or 'unknown'}"
+        f" gemlite_reset_config={os.environ.get('SUBSPEC_GEMLITE_RESET_CONFIG')}"
+        f" gemlite_autotune={os.environ.get('SUBSPEC_GEMLITE_AUTOTUNE')}"
+        " compile_mode=None warmup_iter=0"
+    )
+
+
 def _deep_merge_dict(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
     if not override:
         return dict(base)
@@ -332,6 +387,13 @@ def _build_full_parser(base_parser: argparse.ArgumentParser, default_config: Dic
     full_parser.add_argument("--seed", type=int, default=default_config.get("seed", 0))
     full_parser.add_argument("--device", type=str, default="cuda:0")
     full_parser.add_argument("--vram-limit-gb", type=float, default=default_config.get("vram_limit_gb", None))
+    full_parser.add_argument(
+        "--hardware-safe-mode",
+        type=str,
+        choices=["auto", "on", "off"],
+        default=default_config.get("hardware_safe_mode", "auto"),
+        help="Auto-applies safer runtime settings for known unstable GPU/kernel combinations.",
+    )
     full_parser.add_argument("--compile-mode", type=str, default=default_config.get("compile_mode", None))
     full_parser.add_argument("--temperature", type=float, default=default_config.get("temperature", 0.0))
     full_parser.add_argument("--do-sample", action="store_true", default=default_config.get("do_sample", False))
@@ -440,6 +502,7 @@ def _apply_cli_overrides(config: AppConfig, config_args: argparse.Namespace) -> 
     config.seed = int(config_args.seed)
     config.device = config_args.device
     config.vram_limit_gb = config_args.vram_limit_gb
+    config.hardware_safe_mode = config_args.hardware_safe_mode
     config.compile_mode = _normalize_compile_mode(config_args.compile_mode)
     config.temperature = float(config_args.temperature)
     config.do_sample = bool(config_args.do_sample)
@@ -596,6 +659,7 @@ def main():
         default_config=default_config,
         config_args=config_args,
     )
+    _apply_hardware_safety_overrides(config)
     _configure_wandb_flags(config)
 
     # Allow YAML to specify recipes via import path + kwargs.
