@@ -6,6 +6,18 @@ python -m run.main \
   --max-new-tokens 256 \
   --ignore-eos \
   run-test
+
+SUBSPEC_HQQ_BACKEND=pytorch \
+python -m run.main \
+  --config configs/exp_offloading/subspec_sd_llama_7b_vram_16gb.yaml \
+  --vram-limit-gb 14 \
+  --test-input-tokens 1024 \
+  --max-new-tokens 256 \
+  --ignore-eos \
+  --compile-mode none \
+  --warmup-iter 0 \
+  run-test
+
 ```
 
 ### benchmark offloading configs
@@ -23,7 +35,7 @@ By default, each model is tested with VRAM limits `10`, `12`, and `16` GB, using
 Select VRAM limits by passing them as arguments:
 
 ```
-./run_subspec_benchmark.sh 10 16
+VRAM_LIMITS="14 18" SUBSPEC_SAFE_MODE=1 ./SubSpec/run_subspec_benchmark.sh
 ```
 
 Useful overrides:

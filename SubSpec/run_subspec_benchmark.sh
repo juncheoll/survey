@@ -11,6 +11,7 @@ cd "$SCRIPT_DIR"
 
 DEFAULT_MODEL_SIZES=(7b 13b 30b)
 DEFAULT_VRAM_LIMITS=(10 12 16)
+DEFAULT_CONFIG_TEMPLATE_VRAM=16
 
 # Positional args select VRAM limits, e.g. `./run_subspec_benchmark.sh 10 16`.
 if [[ "$#" -gt 0 ]]; then
@@ -33,6 +34,7 @@ SUBSPEC_COMPILE_MODE="${SUBSPEC_COMPILE_MODE:-}"
 SUBSPEC_CACHE_IMPLEMENTATION="${SUBSPEC_CACHE_IMPLEMENTATION:-}"
 SUBSPEC_WARMUP_ITER="${SUBSPEC_WARMUP_ITER:-}"
 SUBSPEC_HQQ_BACKEND="${SUBSPEC_HQQ_BACKEND:-}"
+SUBSPEC_CONFIG_TEMPLATE_VRAM="${SUBSPEC_CONFIG_TEMPLATE_VRAM:-$DEFAULT_CONFIG_TEMPLATE_VRAM}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 SPECEXEC_PROMPTS_FILE="${SPECEXEC_PROMPTS_FILE:-$SCRIPT_DIR/../SpecExec/specexec/data/oasst_prompts.json}"
 TEST_INPUT_TEXT="${TEST_INPUT_TEXT:-}"
@@ -207,6 +209,7 @@ ensure_model_cached() {
   echo "# ignore_eos: $IGNORE_EOS"
   echo "# download_models: $DOWNLOAD_MODELS"
   echo "# safe_mode: $SUBSPEC_SAFE_MODE"
+  echo "# config_template_vram_gb: $SUBSPEC_CONFIG_TEMPLATE_VRAM"
   echo "# compile_mode: ${SUBSPEC_COMPILE_MODE:-<config>}"
   echo "# cache_implementation: ${SUBSPEC_CACHE_IMPLEMENTATION:-<config>}"
   echo "# warmup_iter: ${SUBSPEC_WARMUP_ITER:-<config>}"
@@ -227,6 +230,12 @@ run_one() {
   vram_limit="${vram_limit%GB}"
   local config_rel="configs/exp_offloading/subspec_sd_llama_${model_size}_vram_${vram_limit}gb.yaml"
   local config_abs="$CONFIG_DIR/subspec_sd_llama_${model_size}_vram_${vram_limit}gb.yaml"
+  local template_vram="${SUBSPEC_CONFIG_TEMPLATE_VRAM%gb}"
+  template_vram="${template_vram%GB}"
+  local template_config_rel="configs/exp_offloading/subspec_sd_llama_${model_size}_vram_${template_vram}gb.yaml"
+  local template_config_abs="$CONFIG_DIR/subspec_sd_llama_${model_size}_vram_${template_vram}gb.yaml"
+  local selected_config_rel="$config_rel"
+  local selected_config_abs="$config_abs"
   local stdout_log="$RUN_LOG_DIR/llama_${model_size}_vram_${vram_limit}gb.stdout.log"
   local started_at
   local started_sec
@@ -240,7 +249,12 @@ run_one() {
 
   total=$((total + 1))
 
-  if [[ ! -f "$config_abs" ]]; then
+  if [[ ! -f "$selected_config_abs" ]]; then
+    selected_config_rel="$template_config_rel"
+    selected_config_abs="$template_config_abs"
+  fi
+
+  if [[ ! -f "$selected_config_abs" ]]; then
     started_at="$(date -Iseconds)"
     ended_at="$started_at"
     status="missing_config"
@@ -249,17 +263,19 @@ run_one() {
     failed=$((failed + 1))
     {
       echo "Missing config: $config_abs"
+      echo "Missing template config: $template_config_abs"
     } > "$stdout_log"
     printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-      "$started_at" "$ended_at" "0" "$model_size" "$vram_limit" "$config_rel" "$status" "$exit_code" \
+      "$started_at" "$ended_at" "0" "$model_size" "$vram_limit" "$selected_config_rel" "$status" "$exit_code" \
       "$stdout_log" "" >> "$SUMMARY_LOG"
-    echo "[run] missing config: $config_rel"
+    echo "[run] missing config and template: $config_rel, $template_config_rel"
     return
   fi
 
   cmd=(
     "$PYTHON_BIN" -m run.main
-    --config "$config_rel"
+    --config "$selected_config_rel"
+    --vram-limit-gb "$vram_limit"
     --max-length "$MAX_LENGTH"
     --test-input-tokens "$TEST_INPUT_TOKENS"
     --max-new-tokens "$MAX_NEW_TOKENS"
@@ -293,11 +309,16 @@ run_one() {
   echo "[run] llama_${model_size} vram=${vram_limit}gb"
   {
     echo "# started_at: $started_at"
+    echo "# requested_config: $config_rel"
+    echo "# selected_config: $selected_config_rel"
+    if [[ "$selected_config_rel" != "$config_rel" ]]; then
+      echo "# note: requested config was not found; using template config and overriding --vram-limit-gb $vram_limit"
+    fi
     printf "# command:"
     printf " %q" "${cmd[@]}"
     echo
     echo
-    ensure_model_cached "$config_abs"
+    ensure_model_cached "$selected_config_abs"
     preflight_exit_code=$?
     if [[ "$preflight_exit_code" -ne 0 ]]; then
       echo "[run] skipped because preflight failed with exit_code=$preflight_exit_code" >&2
@@ -328,7 +349,7 @@ run_one() {
   fi
 
   printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-    "$started_at" "$ended_at" "$duration_sec" "$model_size" "$vram_limit" "$config_rel" "$status" "$exit_code" \
+    "$started_at" "$ended_at" "$duration_sec" "$model_size" "$vram_limit" "$selected_config_rel" "$status" "$exit_code" \
     "$stdout_log" "$experiment_log_dir" >> "$SUMMARY_LOG"
 }
 
