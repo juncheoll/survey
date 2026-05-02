@@ -22,6 +22,46 @@ class HqqQuantizer:
         def phase(message):
             logging.info(f"[HqqQuantizer] {message}")
 
+        def maybe_patch_gemlite_cpu_packing():
+            mode = (os.environ.get("SUBSPEC_GEMLITE_CPU_PACK") or "auto").strip().lower()
+            if mode in {"0", "false", "no", "off", "disable", "disabled"}:
+                return
+
+            enable = mode in {"1", "true", "yes", "y", "on", "enable", "enabled"}
+            if mode == "auto":
+                try:
+                    import torch
+
+                    device_name = torch.cuda.get_device_properties(device).name.lower()
+                    enable = "4090" in device_name
+                except Exception:
+                    enable = False
+
+            if not enable:
+                return
+
+            try:
+                import gemlite.bitpack as gemlite_bitpack  # type: ignore
+                import gemlite.core as gemlite_core  # type: ignore
+
+                def pack_weights_over_cols_cpu_then_to_device(W_q, W_nbits, packing_bitwidth, transpose):
+                    out_device = W_q.device
+                    packed, elements_per_sample = gemlite_bitpack.pack_weights_over_cols_torch(
+                        W_q.detach().cpu(),
+                        W_nbits,
+                        packing_bitwidth,
+                        transpose,
+                    )
+                    return packed.to(out_device, non_blocking=True), elements_per_sample
+
+                gemlite_core.pack_weights_over_cols_triton = pack_weights_over_cols_cpu_then_to_device
+                gemlite_bitpack.pack_weights_over_cols_triton = pack_weights_over_cols_cpu_then_to_device
+                logging.warning(
+                    "GemLite CUDA bitpacking is disabled; using CPU bitpacking and moving packed weights back to GPU."
+                )
+            except Exception as e:
+                logging.warning(f"Failed to patch GemLite CPU bitpacking fallback: {e}")
+
         # Optional GemLite tuning knobs (no-op unless env vars are set).
         # These primarily reduce warmup/autotune overhead and can improve steady-state
         # performance depending on GPU + shapes.
@@ -94,6 +134,8 @@ class HqqQuantizer:
             return
         if hqq_backend != "gemlite":
             logging.warning(f"Unsupported SUBSPEC_HQQ_BACKEND={hqq_backend}; falling back to GemLite.")
+
+        maybe_patch_gemlite_cpu_packing()
 
         act_mode = (os.environ.get("SUBSPEC_GEMLITE_ACTIVATIONS") or "fp16").strip().lower()
         if act_mode in {"fp8", "a8", "a8wn"}:

@@ -550,15 +550,13 @@ http = [
 
 [[package]]
 name = "gemlite"
-version = "0.4.8"
+version = "0.5.1.post1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
-    { name = "torch" },
     { name = "tqdm" },
-    { name = "triton" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a2/ca/214ff38fd5366487c26b65bc1521e977b2d7d82d661cece3c2b85d75a06f/gemlite-0.4.8.tar.gz", hash = "sha256:a4513bacf7b718e13b86185f9b9f194afe1dc14dc1b4f01c7511dc823955f035", size = 107233, upload-time = "2025-06-10T09:36:10.731Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/15/82/d3c2946dd38698624d60368518d901056199b4141e25e194598f463d5f8a/gemlite-0.5.1.post1.tar.gz", hash = "sha256:ec94d17da0f97b60b007557ff505f46edf70089bd5d11e7768ceb21cb0c096c6", size = 131671, upload-time = "2025-10-20T15:37:15.219Z" }
 
 [[package]]
 name = "hf-xet"
@@ -2014,7 +2012,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "datasets", specifier = "==3.6.0" },
-    { name = "gemlite", specifier = "==0.4.8" },
+    { name = "gemlite", specifier = "==0.5.1.post1" },
     { name = "hqq", specifier = "==0.2.6" },
     { name = "nvtx", specifier = "==0.2.11" },
     { name = "prettytable", specifier = "==3.16.0" },
