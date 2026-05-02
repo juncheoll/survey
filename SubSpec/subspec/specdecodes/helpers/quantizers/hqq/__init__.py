@@ -62,6 +62,51 @@ class HqqQuantizer:
             except Exception as e:
                 logging.warning(f"Failed to patch GemLite CPU bitpacking fallback: {e}")
 
+        def maybe_force_gemlite_matmul_type():
+            mode = (os.environ.get("SUBSPEC_GEMLITE_MATMUL_TYPE") or "auto").strip().upper()
+            if mode in {"0", "FALSE", "NO", "OFF", "DISABLE", "DISABLED", "DEFAULT"}:
+                return
+
+            if mode == "AUTO":
+                try:
+                    import torch
+
+                    device_name = torch.cuda.get_device_properties(device).name.lower()
+                except Exception:
+                    device_name = ""
+
+                # GemLite's default 4-bit M=1 path is GEMV_REVSPLITK. On RTX 4090 this can
+                # segfault inside Triton's code generator, so use the splitK GEMV kernel.
+                if "4090" not in device_name:
+                    return
+                mode = "GEMV_SPLITK"
+
+            valid_modes = {"GEMV", "GEMV_REVSPLITK", "GEMV_SPLITK", "GEMM_SPLITK", "GEMM"}
+            if mode not in valid_modes:
+                logging.warning(f"Unsupported SUBSPEC_GEMLITE_MATMUL_TYPE={mode}; leaving GemLite auto mode.")
+                return
+
+            try:
+                import types
+
+                patched = 0
+                for module in model.modules():
+                    if not hasattr(module, "forward_manual"):
+                        continue
+                    if not module.__class__.__module__.startswith("gemlite"):
+                        continue
+
+                    def _forward(self, x, _matmul_type=mode):
+                        return self.forward_manual(x, matmul_type=_matmul_type)
+
+                    module.forward = types.MethodType(_forward, module)
+                    patched += 1
+
+                if patched:
+                    logging.warning(f"Forced GemLite matmul type to {mode} for {patched} modules.")
+            except Exception as e:
+                logging.warning(f"Failed to force GemLite matmul type '{mode}': {e}")
+
         # Optional GemLite tuning knobs (no-op unless env vars are set).
         # These primarily reduce warmup/autotune overhead and can improve steady-state
         # performance depending on GPU + shapes.
@@ -186,3 +231,4 @@ class HqqQuantizer:
         phase("GemLite prepare_for_inference start")
         prepare_for_inference(model, backend="gemlite")
         phase("GemLite prepare_for_inference done")
+        maybe_force_gemlite_matmul_type()
